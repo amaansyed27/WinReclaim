@@ -1,6 +1,6 @@
 # Architecture
 
-WinReclaim is organised around a strict boundary between discovery, judgement and execution.
+WinReclaim is organised around strict boundaries between discovery, interpretation, judgement and execution.
 
 ## Layers
 
@@ -11,6 +11,12 @@ The alpha uses bounded recursive inspection of known developer-tool locations an
 ### Rules
 
 Rules convert known paths into semantic findings. A finding contains a category, consequence, confidence and safety class. Rules do not contain shell commands and cannot request arbitrary deletion.
+
+### Optional intent interpreter
+
+When `OPENAI_API_KEY` is available, the Rust backend may send anonymised candidate metadata to the OpenAI Responses API. The model receives category labels, sizes, safety classes and consequence text. It never receives paths, usernames, project names or the file tree.
+
+Strict structured output limits the response to a target size, allowed safety classes, candidate exclusions and a short explanation. A separate deterministic Rust selector validates the response, rejects unknown candidate IDs and maps the constraints onto the current scan. The model cannot construct or execute cleanup actions.
 
 ### Planner
 
