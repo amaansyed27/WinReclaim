@@ -55,6 +55,23 @@ export interface ScanProgress {
   scannedEntries: number;
 }
 
+export interface AiStatus {
+  configured: boolean;
+  model: string;
+  privacyNote: string;
+}
+
+export interface IntentSuggestion {
+  selectedFindingIds: string[];
+  targetReclaimBytes?: number | null;
+  estimatedReclaimBytes: number;
+  allowedRiskClasses: RiskClass[];
+  excludedLabels: string[];
+  summary: string;
+  model: string;
+  remoteUsed: boolean;
+}
+
 export interface CleanupPlanItem {
   findingId: string;
   displayName: string;
