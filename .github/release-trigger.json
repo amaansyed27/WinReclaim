@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T16:50:00Z",
-  "reason": "Fresh release after replacing fragile release deletion with idempotent create-or-update publication"
+  "requestedAt": "2026-07-18T19:06:00Z",
+  "reason": "Fresh release using Tauri v2 signed Windows installers directly as updater artifacts"
 }
