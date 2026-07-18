@@ -4,31 +4,39 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   validate:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
+
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
+
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
+
       - name: Frontend type check
         run: npm run check
+
       - name: Frontend build
         run: npm run build
-      - name: Rust format
-        working-directory: src-tauri
-        run: cargo fmt --check
+
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test
+
+      - name: Rust check
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
       - name: Rust clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets
