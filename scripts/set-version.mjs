@@ -18,14 +18,16 @@ await updateJson("src-tauri/tauri.conf.json");
 
 const cargoPath = "src-tauri/Cargo.toml";
 const cargo = await readFile(cargoPath, "utf8");
-const updatedCargo = cargo.replace(
-  /(^\[package\][\s\S]*?^version\s*=\s*)"[^"]+"/m,
-  `$1"${input}"`
-);
+const packageVersionPattern = /(^\[package\][\s\S]*?^version\s*=\s*)"([^"]+)"/m;
+const match = cargo.match(packageVersionPattern);
 
-if (updatedCargo === cargo) {
+if (!match) {
   throw new Error("Unable to locate the Cargo package version");
 }
 
-await writeFile(cargoPath, updatedCargo);
+const updatedCargo = cargo.replace(packageVersionPattern, `$1"${input}"`);
+if (updatedCargo !== cargo) {
+  await writeFile(cargoPath, updatedCargo);
+}
+
 console.log(`WinReclaim version set to ${input}`);
