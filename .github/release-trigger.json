@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T16:02:00Z",
-  "reason": "Fresh release after normalizing Rust source and hardening diagnostic reporting"
+  "requestedAt": "2026-07-18T16:10:00Z",
+  "reason": "Fresh release after committing the final rustfmt-compatible Clippy correction"
 }
