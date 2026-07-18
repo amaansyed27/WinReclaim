@@ -58,8 +58,7 @@ fn run(executable: &str, arguments: &[&str]) -> Result<Output> {
 fn concise_output(prefix: &str, output: &Output) -> String {
     let text = String::from_utf8_lossy(&output.stdout)
         .lines()
-        .filter(|line| !line.trim().is_empty())
-        .next_back()
+        .rfind(|line| !line.trim().is_empty())
         .unwrap_or_default()
         .trim()
         .to_string();
