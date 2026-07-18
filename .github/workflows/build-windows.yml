@@ -88,7 +88,7 @@ jobs:
         run: |
           $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
           Remove-Item $logPath -Force -ErrorAction SilentlyContinue
-          $failed = $false
+          $script:failed = $false
 
           function Invoke-CargoValidation {
             param([string]$Label, [string[]]$Arguments)
@@ -126,7 +126,11 @@ jobs:
             $logText
             "```"
           ) | Set-Content $bodyPath -Encoding utf8
-          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+
+          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
+          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
+          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
+
           if ([string]::IsNullOrWhiteSpace($issue)) {
             gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
           } else {
@@ -180,7 +184,11 @@ jobs:
             $logText
             "```"
           ) | Set-Content $bodyPath -Encoding utf8
-          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+
+          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
+          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
+          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
+
           if ([string]::IsNullOrWhiteSpace($issue)) {
             gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
           } else {
@@ -252,7 +260,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
+          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
+          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
+
           if (-not [string]::IsNullOrWhiteSpace($issue)) {
             gh issue close $issue --repo $env:GITHUB_REPOSITORY --comment "Resolved by the successful v$env:RELEASE_VERSION release pipeline."
           }
