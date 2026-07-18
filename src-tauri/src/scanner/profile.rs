@@ -117,7 +117,7 @@ pub fn scan_profile(
         completed_targets += 1;
     }
 
-    findings.sort_by(|left, right| right.estimated_bytes.cmp(&left.estimated_bytes));
+    findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
     let report = ScanReport {
         scan_id: Uuid::new_v4(),
         started_at,
