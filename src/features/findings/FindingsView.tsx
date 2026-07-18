@@ -1,24 +1,55 @@
 import { ArrowIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
-import type { Finding, RiskClass, ScanReport } from "../../types";
+import type { AiStatus, Finding, RiskClass, ScanReport } from "../../types";
 import { FindingRow } from "./FindingRow";
+import { IntentPlanner } from "./IntentPlanner";
 
 const groups: { id: RiskClass; title: string; note: string }[] = [
-  { id: "safe_now", title: "Safe now", note: "Regenerable or disposable data with narrow cleanup rules." },
-  { id: "rebuild_or_redownload", title: "Rebuild or redownload later", note: "Useful space, but the tool may need to fetch or rebuild it again." },
-  { id: "review_first", title: "Review first", note: "Potentially important environments, containers or project output." },
-  { id: "protected", title: "Protected", note: "WinReclaim will not include these in an automatic cleanup plan." }
+  {
+    id: "safe_now",
+    title: "Safe now",
+    note: "Regenerable or disposable data with narrow cleanup rules."
+  },
+  {
+    id: "rebuild_or_redownload",
+    title: "Rebuild or redownload later",
+    note: "Useful space, but the tool may need to fetch or rebuild it again."
+  },
+  {
+    id: "review_first",
+    title: "Review first",
+    note: "Potentially important environments, containers or project output."
+  },
+  {
+    id: "protected",
+    title: "Protected",
+    note: "WinReclaim will not include these in an automatic cleanup plan."
+  }
 ];
 
 interface FindingsViewProps {
   report: ScanReport;
   selectedIds: Set<string>;
+  aiStatus: AiStatus | null;
+  intentLoading: boolean;
+  intentSummary: string | null;
+  onInterpretIntent: (prompt: string) => Promise<void>;
   onToggle: (id: string) => void;
   onBack: () => void;
   onCreatePlan: () => void;
 }
 
-export function FindingsView({ report, selectedIds, onToggle, onBack, onCreatePlan }: FindingsViewProps) {
+export function FindingsView({
+  report,
+  selectedIds,
+  aiStatus,
+  intentLoading,
+  intentSummary,
+  onInterpretIntent,
+  onToggle,
+  onBack,
+  onCreatePlan
+}: FindingsViewProps) {
   const selectedBytes = report.findings
     .filter((finding) => selectedIds.has(finding.id))
     .reduce((total, finding) => total + finding.estimatedBytes, 0);
@@ -32,10 +63,22 @@ export function FindingsView({ report, selectedIds, onToggle, onBack, onCreatePl
           <p>Findings are grouped by consequence. Nothing is selected automatically.</p>
         </div>
         <div className="view-stat">
-          <strong>{formatBytes(report.findings.reduce((sum, item) => sum + item.estimatedBytes, 0))}</strong>
+          <strong>
+            {formatBytes(
+              report.findings.reduce((sum, item) => sum + item.estimatedBytes, 0)
+            )}
+          </strong>
           <span>classified storage</span>
         </div>
       </header>
+
+      <IntentPlanner
+        status={aiStatus}
+        loading={intentLoading}
+        summary={intentSummary}
+        selectedBytes={selectedBytes}
+        onInterpret={onInterpretIntent}
+      />
 
       <div className="finding-groups">
         {groups.map((group) => {
@@ -43,15 +86,28 @@ export function FindingsView({ report, selectedIds, onToggle, onBack, onCreatePl
             .filter((finding) => finding.riskClass === group.id)
             .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
           if (!items.length) return null;
+
           return (
             <section className="finding-group" key={group.id}>
               <div className="finding-group-head">
-                <div><h2>{group.title}</h2><p>{group.note}</p></div>
-                <strong>{formatBytes(items.reduce((sum, item) => sum + item.estimatedBytes, 0))}</strong>
+                <div>
+                  <h2>{group.title}</h2>
+                  <p>{group.note}</p>
+                </div>
+                <strong>
+                  {formatBytes(
+                    items.reduce((sum, item) => sum + item.estimatedBytes, 0)
+                  )}
+                </strong>
               </div>
               <div className="finding-list">
                 {items.map((finding: Finding) => (
-                  <FindingRow finding={finding} key={finding.id} selected={selectedIds.has(finding.id)} onToggle={onToggle} />
+                  <FindingRow
+                    finding={finding}
+                    key={finding.id}
+                    selected={selectedIds.has(finding.id)}
+                    onToggle={onToggle}
+                  />
                 ))}
               </div>
             </section>
@@ -60,9 +116,18 @@ export function FindingsView({ report, selectedIds, onToggle, onBack, onCreatePl
       </div>
 
       <footer className="sticky-action-bar">
-        <button className="button button-quiet" onClick={onBack}>Back</button>
-        <div><span>{selectedIds.size} selected</span><strong>{formatBytes(selectedBytes)} estimated</strong></div>
-        <button className="button button-primary" onClick={onCreatePlan} disabled={!selectedIds.size}>
+        <button className="button button-quiet" onClick={onBack}>
+          Back
+        </button>
+        <div>
+          <span>{selectedIds.size} selected</span>
+          <strong>{formatBytes(selectedBytes)} estimated</strong>
+        </div>
+        <button
+          className="button button-primary"
+          onClick={onCreatePlan}
+          disabled={!selectedIds.size}
+        >
           Build cleanup plan <ArrowIcon />
         </button>
       </footer>
