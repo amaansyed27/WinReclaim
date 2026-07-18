@@ -80,6 +80,13 @@ jobs:
           npm run check
           npm run build
 
+      - name: Normalize Rust source
+        working-directory: src-tauri
+        shell: pwsh
+        run: |
+          cargo fmt
+          cargo clippy --fix --all-targets --allow-dirty --allow-staged -- -D warnings
+
       - name: Validate Rust
         id: rust_validation
         continue-on-error: true
@@ -118,35 +125,24 @@ jobs:
           @(
             "# Automated release diagnostics"
             ""
-            "- Commit: $env:GITHUB_SHA"
-            "- Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-            "- Stage: Rust validation"
+            "Commit: $env:GITHUB_SHA"
+            "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "Stage: Rust validation"
             ""
-            "```text"
             $logText
-            "```"
           ) | Set-Content $bodyPath -Encoding utf8
-
-          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
-          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
-          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
-
-          if ([string]::IsNullOrWhiteSpace($issue)) {
-            gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
-          } else {
-            gh issue edit $issue --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
-          }
+          gh issue edit 1 --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
           throw "Rust validation failed. Diagnostic issue updated."
 
-      - name: Commit release version
+      - name: Commit normalized release source
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+          git add -A
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "Release v$env:RELEASE_VERSION"
+            git commit -m "Prepare release v$env:RELEASE_VERSION"
             git push origin HEAD:main
           }
           "RELEASE_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
@@ -176,24 +172,13 @@ jobs:
           @(
             "# Automated release diagnostics"
             ""
-            "- Commit: $env:GITHUB_SHA"
-            "- Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-            "- Stage: Signed Tauri build"
+            "Commit: $env:GITHUB_SHA"
+            "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "Stage: Signed Tauri build"
             ""
-            "```text"
             $logText
-            "```"
           ) | Set-Content $bodyPath -Encoding utf8
-
-          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
-          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
-          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
-
-          if ([string]::IsNullOrWhiteSpace($issue)) {
-            gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
-          } else {
-            gh issue edit $issue --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
-          }
+          gh issue edit 1 --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
           throw "Tauri build failed. Diagnostic issue updated."
 
       - name: Publish GitHub release and updater manifest
@@ -260,10 +245,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $issueRows = gh issue list --repo $env:GITHUB_REPOSITORY --state open --limit 100 --json number,title | ConvertFrom-Json
-          $issueRecord = $issueRows | Where-Object { $_.title -eq "Automated release diagnostics" } | Select-Object -First 1
-          $issue = if ($null -eq $issueRecord) { $null } else { [string]$issueRecord.number }
-
-          if (-not [string]::IsNullOrWhiteSpace($issue)) {
-            gh issue close $issue --repo $env:GITHUB_REPOSITORY --comment "Resolved by the successful v$env:RELEASE_VERSION release pipeline."
-          }
+          gh issue close 1 --repo $env:GITHUB_REPOSITORY --comment "Resolved by the successful v$env:RELEASE_VERSION release pipeline."
