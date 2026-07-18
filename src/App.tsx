@@ -9,10 +9,13 @@ import {
   cancelScan,
   createCleanupPlan,
   executeCleanupPlan,
+  getAiStatus,
+  interpretCleanupIntent,
   onScanProgress,
   startScan
 } from "./lib/tauri";
 import type {
+  AiStatus,
   CleanupPlan,
   CleanupReceipt,
   ScanProgress,
@@ -25,10 +28,13 @@ export function App() {
   const [step, setStep] = useState<AppStep>("scan");
   const [scanning, setScanning] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [intentLoading, setIntentLoading] = useState(false);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [report, setReport] = useState<ScanReport | null>(null);
   const [plan, setPlan] = useState<CleanupPlan | null>(null);
   const [receipt, setReceipt] = useState<CleanupReceipt | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [intentSummary, setIntentSummary] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -40,8 +46,26 @@ export function App() {
     return () => dispose?.();
   }, []);
 
+  useEffect(() => {
+    getAiStatus()
+      .then(setAiStatus)
+      .catch(() => {
+        setAiStatus({
+          configured: false,
+          model: "gpt-5.6",
+          privacyNote:
+            "Only anonymized category, size, risk and consequence metadata is sent. Paths remain local."
+        });
+      });
+  }, []);
+
   const actionFindingIds = useMemo(
-    () => new Set(report?.findings.filter((finding) => finding.actionAvailable).map((finding) => finding.id) ?? []),
+    () =>
+      new Set(
+        report?.findings
+          .filter((finding) => finding.actionAvailable)
+          .map((finding) => finding.id) ?? []
+      ),
     [report]
   );
 
@@ -51,6 +75,7 @@ export function App() {
     setProgress(null);
     setPlan(null);
     setReceipt(null);
+    setIntentSummary(null);
     setSelectedIds(new Set());
     setStep("scan");
 
@@ -76,6 +101,30 @@ export function App() {
       else next.add(id);
       return next;
     });
+  }
+
+  async function handleInterpretIntent(prompt: string) {
+    if (!report) return;
+    setError(null);
+    setIntentLoading(true);
+
+    try {
+      const suggestion = await interpretCleanupIntent(report.scanId, prompt);
+      const validSelection = suggestion.selectedFindingIds.filter((id) =>
+        actionFindingIds.has(id)
+      );
+      setSelectedIds(new Set(validSelection));
+
+      const exclusionNote = suggestion.excludedLabels.length
+        ? ` Explicitly excluded: ${suggestion.excludedLabels.join(", ")}.`
+        : "";
+      setIntentSummary(`${suggestion.summary}${exclusionNote}`);
+    } catch (intentError) {
+      setIntentSummary(null);
+      setError(String(intentError));
+    } finally {
+      setIntentLoading(false);
+    }
   }
 
   async function handleCreatePlan() {
@@ -130,6 +179,10 @@ export function App() {
           <FindingsView
             report={report}
             selectedIds={selectedIds}
+            aiStatus={aiStatus}
+            intentLoading={intentLoading}
+            intentSummary={intentSummary}
+            onInterpretIntent={handleInterpretIntent}
             onToggle={toggleFinding}
             onBack={() => setStep("scan")}
             onCreatePlan={handleCreatePlan}
@@ -153,6 +206,7 @@ export function App() {
               setReport(null);
               setPlan(null);
               setReceipt(null);
+              setIntentSummary(null);
               setSelectedIds(new Set());
               setStep("scan");
             }}
