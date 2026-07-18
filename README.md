@@ -32,6 +32,31 @@ WinReclaim started from a real Windows storage investigation. WhatsApp was suspe
 - Chrome, Edge and Cursor data
 - Large `node_modules`, Rust `target`, Python virtual environments and build folders in common project locations
 
+### Reclaim by intent
+
+The optional GPT-5.6 feature translates a request such as:
+
+> Free around 20 GB, but do not touch Ollama, browser profiles or Android emulators.
+
+into conservative constraints:
+
+- target reclaim size
+- allowed safety classes
+- explicit exclusions
+- a short explanation
+
+GPT never receives filesystem paths, usernames, project names or directory trees. It cannot return commands or deletion targets. Rust applies those constraints only to the allowlisted findings from the current scan, and the user must still review the selection before WinReclaim creates a hashed cleanup plan.
+
+Set the API key in the process environment before starting the app:
+
+```powershell
+$env:OPENAI_API_KEY="your-key"
+$env:OPENAI_MODEL="gpt-5.6" # optional override
+npm run tauri dev
+```
+
+Without an API key, scanning, manual planning, cleanup and receipts remain fully available offline.
+
 ### Executable adapters
 
 - User temp files older than seven days
@@ -62,6 +87,7 @@ WinReclaim does not:
 - delete Android emulators or SDK packages by raw folder removal
 - follow filesystem reparse points during cleanup
 - accept arbitrary deletion paths from the frontend
+- let GPT execute or broaden a cleanup plan
 
 ## Architecture
 
@@ -70,6 +96,7 @@ React UI
   └─ typed Tauri commands
       ├─ scanner
       ├─ deterministic rules
+      ├─ optional GPT intent constraints
       ├─ immutable cleanup planner
       ├─ allowlisted cleanup adapters
       ├─ verifier
@@ -110,9 +137,10 @@ Rust checks:
 
 ```powershell
 cd src-tauri
-cargo fmt --check
+cargo fmt
 cargo test
-cargo clippy --all-targets -- -D warnings
+cargo check --all-targets
+cargo clippy --all-targets
 ```
 
 Build installers:
@@ -121,11 +149,13 @@ Build installers:
 npm run tauri build
 ```
 
-Artifacts are generated under `src-tauri\target\release\bundle`.
+Artifacts are generated under `src-tauri\target\release\bundle`. The manual **Build Windows installers** GitHub Actions workflow also uploads MSI and NSIS artifacts.
 
 ## Privacy
 
-The scan runs locally. WinReclaim does not upload file paths, project names, directory trees or receipts. No telemetry is included in this alpha.
+The scan, rules engine, plans, cleanup and receipts run locally. WinReclaim does not upload file paths, project names, directory trees or receipts. No telemetry is included in this alpha.
+
+When reclaim-by-intent is enabled, only the labels, categories, sizes, safety classes and consequences of currently executable findings are sent to the OpenAI Responses API with response storage disabled. The API key remains in the Rust process environment and is never sent to the webview.
 
 ## Status
 
