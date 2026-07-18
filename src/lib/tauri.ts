@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AiStatus,
   CleanupPlan,
   CleanupReceipt,
+  IntentSuggestion,
   ScanProgress,
   ScanReport
 } from "../types";
@@ -13,6 +15,19 @@ export async function startScan(): Promise<ScanReport> {
 
 export async function cancelScan(): Promise<void> {
   return invoke("cancel_scan");
+}
+
+export async function getAiStatus(): Promise<AiStatus> {
+  return invoke<AiStatus>("get_ai_status");
+}
+
+export async function interpretCleanupIntent(
+  scanId: string,
+  prompt: string
+): Promise<IntentSuggestion> {
+  return invoke<IntentSuggestion>("interpret_cleanup_intent", {
+    request: { scanId, prompt }
+  });
 }
 
 export async function createCleanupPlan(
