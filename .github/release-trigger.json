@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T12:45:00Z",
-  "reason": "Fresh release run after version script fix"
+  "requestedAt": "2026-07-18T13:50:00Z",
+  "reason": "Fresh release run with captured Rust validation diagnostics"
 }
