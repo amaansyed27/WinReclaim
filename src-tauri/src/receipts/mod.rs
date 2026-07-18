@@ -12,5 +12,9 @@ pub fn persist_receipt(receipt: &CleanupReceipt) -> Result<PathBuf> {
 }
 
 fn receipt_root() -> PathBuf {
-    std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("WinReclaim").join("receipts")
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("WinReclaim")
+        .join("receipts")
 }

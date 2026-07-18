@@ -137,8 +137,8 @@ pub(crate) fn request_constraints(
 
     let output = extract_output_text(&response_json)
         .ok_or_else(|| anyhow!("OpenAI response did not contain structured output text"))?;
-    let constraints = serde_json::from_str(output)
-        .context("Unable to parse OpenAI intent constraints")?;
+    let constraints =
+        serde_json::from_str(output).context("Unable to parse OpenAI intent constraints")?;
 
     Ok((model, constraints))
 }

@@ -13,11 +13,7 @@ pub fn prune_huggingface() -> Result<(u64, u64, String)> {
 
 pub fn clean_npm_cache() -> Result<(u64, u64, String)> {
     let output = run("npm", &["cache", "clean", "--force"])?;
-    Ok((
-        0,
-        0,
-        concise_output("npm cache cleanup completed", &output),
-    ))
+    Ok((0, 0, concise_output("npm cache cleanup completed", &output)))
 }
 
 pub fn prune_docker() -> Result<(u64, u64, String)> {

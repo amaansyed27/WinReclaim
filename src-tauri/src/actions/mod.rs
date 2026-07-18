@@ -20,7 +20,27 @@ pub fn execute_item(item: &CleanupPlanItem) -> ActionResult {
     };
     let measured_after = directory_size(target, &cancel).bytes;
     match outcome {
-        Ok((deleted, skipped, message)) => ActionResult { finding_id: item.finding_id, display_name: item.display_name.clone(), estimated_bytes: item.estimated_bytes, measured_bytes_before: measured_before, measured_bytes_after: measured_after, deleted_entries: deleted, skipped_entries: skipped, success: true, message },
-        Err(error) => ActionResult { finding_id: item.finding_id, display_name: item.display_name.clone(), estimated_bytes: item.estimated_bytes, measured_bytes_before: measured_before, measured_bytes_after: measured_after, deleted_entries: 0, skipped_entries: 0, success: false, message: error.to_string() },
+        Ok((deleted, skipped, message)) => ActionResult {
+            finding_id: item.finding_id,
+            display_name: item.display_name.clone(),
+            estimated_bytes: item.estimated_bytes,
+            measured_bytes_before: measured_before,
+            measured_bytes_after: measured_after,
+            deleted_entries: deleted,
+            skipped_entries: skipped,
+            success: true,
+            message,
+        },
+        Err(error) => ActionResult {
+            finding_id: item.finding_id,
+            display_name: item.display_name.clone(),
+            estimated_bytes: item.estimated_bytes,
+            measured_bytes_before: measured_before,
+            measured_bytes_after: measured_after,
+            deleted_entries: 0,
+            skipped_entries: 0,
+            success: false,
+            message: error.to_string(),
+        },
     }
 }

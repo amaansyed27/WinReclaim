@@ -24,12 +24,11 @@ pub async fn start_scan(
     let app_state = state.inner().clone();
     let scan_state = app_state.clone();
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        scan_profile(&app, &scan_state, request)
-    })
-    .await
-    .map_err(|error| format!("Scan task failed: {error}"))?
-    .map_err(|error| error.to_string())?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || scan_profile(&app, &scan_state, request))
+            .await
+            .map_err(|error| format!("Scan task failed: {error}"))?
+            .map_err(|error| error.to_string())?;
 
     *app_state
         .latest_scan
@@ -136,9 +135,7 @@ pub async fn execute_cleanup_plan(
             completed_at: Utc::now(),
             disk_free_before: disk_before.free_bytes,
             disk_free_after: disk_after.free_bytes,
-            actual_reclaimed_bytes: disk_after
-                .free_bytes
-                .saturating_sub(disk_before.free_bytes),
+            actual_reclaimed_bytes: disk_after.free_bytes.saturating_sub(disk_before.free_bytes),
             estimated_reclaim_bytes: plan.estimated_reclaim_bytes,
             results,
             protected_summary: vec![
@@ -153,8 +150,9 @@ pub async fn execute_cleanup_plan(
             rule_set_version: plan.rule_set_version.clone(),
         };
 
-        persist_receipt(&receipt)
-            .map_err(|error| format!("Cleanup completed but receipt persistence failed: {error}"))?;
+        persist_receipt(&receipt).map_err(|error| {
+            format!("Cleanup completed but receipt persistence failed: {error}")
+        })?;
         Ok::<CleanupReceipt, String>(receipt)
     })
     .await

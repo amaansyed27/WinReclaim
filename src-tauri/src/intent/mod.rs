@@ -10,7 +10,9 @@ const MAX_PROMPT_CHARS: usize = 1_000;
 
 pub fn interpret_intent(report: &ScanReport, request: IntentRequest) -> Result<IntentSuggestion> {
     if report.scan_id != request.scan_id {
-        return Err(anyhow!("The intent request does not match the current scan"));
+        return Err(anyhow!(
+            "The intent request does not match the current scan"
+        ));
     }
 
     let prompt = request.prompt.trim();

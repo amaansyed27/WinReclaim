@@ -23,7 +23,12 @@ pub fn recognised_dump_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
     walk_size(path, cancel, None, Some(&["dmp", "mdmp", "wer"]))
 }
 
-fn walk_size(root: &Path, cancel: &AtomicBool, minimum_age: Option<Duration>, allowed_extensions: Option<&[&str]>) -> SizeStats {
+fn walk_size(
+    root: &Path,
+    cancel: &AtomicBool,
+    minimum_age: Option<Duration>,
+    allowed_extensions: Option<&[&str]>,
+) -> SizeStats {
     if !root.exists() {
         return SizeStats::default();
     }
@@ -38,7 +43,10 @@ fn walk_size(root: &Path, cancel: &AtomicBool, minimum_age: Option<Duration>, al
         }
         let metadata = match fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
-            Err(_) => { stats.skipped += 1; continue; }
+            Err(_) => {
+                stats.skipped += 1;
+                continue;
+            }
         };
         if is_reparse_point(&metadata) {
             stats.skipped += 1;
@@ -47,15 +55,26 @@ fn walk_size(root: &Path, cancel: &AtomicBool, minimum_age: Option<Duration>, al
         if metadata.is_file() {
             stats.entries += 1;
             if let Some(extensions) = allowed_extensions {
-                let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
-                if !extensions.iter().any(|candidate| *candidate == extension) { continue; }
+                let extension = path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                if !extensions.iter().any(|candidate| *candidate == extension) {
+                    continue;
+                }
             }
             if let Some(age) = minimum_age {
                 let modified = match metadata.modified() {
                     Ok(value) => value,
-                    Err(_) => { stats.skipped += 1; continue; }
+                    Err(_) => {
+                        stats.skipped += 1;
+                        continue;
+                    }
                 };
-                if now.duration_since(modified).unwrap_or_default() < age { continue; }
+                if now.duration_since(modified).unwrap_or_default() < age {
+                    continue;
+                }
             }
             stats.bytes = stats.bytes.saturating_add(metadata.len());
             continue;
@@ -63,10 +82,16 @@ fn walk_size(root: &Path, cancel: &AtomicBool, minimum_age: Option<Duration>, al
         if metadata.is_dir() {
             let entries = match fs::read_dir(&path) {
                 Ok(entries) => entries,
-                Err(_) => { stats.skipped += 1; continue; }
+                Err(_) => {
+                    stats.skipped += 1;
+                    continue;
+                }
             };
             for entry in entries {
-                match entry { Ok(entry) => stack.push(entry.path()), Err(_) => stats.skipped += 1 }
+                match entry {
+                    Ok(entry) => stack.push(entry.path()),
+                    Err(_) => stats.skipped += 1,
+                }
             }
         }
     }

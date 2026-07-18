@@ -15,11 +15,7 @@ use uuid::Uuid;
 const TEMP_MINIMUM_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const PROJECT_SCAN_DEPTH: usize = 7;
 
-pub fn scan_profile(
-    app: &AppHandle,
-    state: &AppState,
-    request: ScanRequest,
-) -> Result<ScanReport> {
+pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> Result<ScanReport> {
     state.cancel_scan.store(false, Ordering::Relaxed);
     let started_at = Utc::now();
     let root = request.root.map(PathBuf::from).unwrap_or(user_profile()?);
@@ -101,11 +97,8 @@ pub fn scan_profile(
             scanned_entries,
         );
 
-        match discover_project_outputs(
-            &project_root,
-            &state.cancel_scan,
-            &mut seen_project_outputs,
-        ) {
+        match discover_project_outputs(&project_root, &state.cancel_scan, &mut seen_project_outputs)
+        {
             Ok((mut output_findings, entries, skipped, bytes)) => {
                 findings.append(&mut output_findings);
                 scanned_entries = scanned_entries.saturating_add(entries);
@@ -255,8 +248,7 @@ fn discover_project_outputs(
             path: entry.path().to_string_lossy().to_string(),
             estimated_bytes: stats.bytes,
             risk_class: RiskClass::ReviewFirst,
-            explanation: "Generated or installed data located inside a project tree."
-                .to_string(),
+            explanation: "Generated or installed data located inside a project tree.".to_string(),
             consequence: consequence.to_string(),
             confidence: crate::domain::Confidence::Medium,
             action_kind: None,

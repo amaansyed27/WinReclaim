@@ -1,9 +1,6 @@
 use crate::domain::{CleanupPlan, CleanupReceipt, ScanReport};
 use std::collections::HashMap;
-use std::sync::{
-    atomic::AtomicBool,
-    Arc, Mutex,
-};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use uuid::Uuid;
 
 #[derive(Clone)]

@@ -92,8 +92,7 @@ fn point_in_triangle(
     third: (f64, f64),
 ) -> bool {
     let sign = |point: (f64, f64), left: (f64, f64), right: (f64, f64)| {
-        (point.0 - right.0) * (left.1 - right.1)
-            - (left.0 - right.0) * (point.1 - right.1)
+        (point.0 - right.0) * (left.1 - right.1) - (left.0 - right.0) * (point.1 - right.1)
     };
     let point = (x, y);
     let first_sign = sign(point, first, second);

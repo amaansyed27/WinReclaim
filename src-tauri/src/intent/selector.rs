@@ -90,10 +90,7 @@ fn validate_risk_classes(values: &[String]) -> Result<Vec<RiskClass>> {
     Ok(parsed)
 }
 
-fn validate_exclusions(
-    values: &[Uuid],
-    candidate_ids: &HashSet<Uuid>,
-) -> Result<HashSet<Uuid>> {
+fn validate_exclusions(values: &[Uuid], candidate_ids: &HashSet<Uuid>) -> Result<HashSet<Uuid>> {
     let mut excluded = HashSet::new();
     for value in values {
         if !candidate_ids.contains(value) {
