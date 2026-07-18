@@ -18,6 +18,10 @@ on:
         required: true
         default: false
         type: boolean
+  push:
+    branches: [main]
+    paths:
+      - ".github/release-trigger.json"
 
 permissions:
   contents: write
@@ -30,6 +34,10 @@ jobs:
   release:
     name: Build and publish Windows release
     runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version || '1.0.0' }}
+      RELEASE_NOTES: ${{ inputs.release_notes || 'Windows 11 x64 release with local-first scanning, safe cleanup plans, receipts, and signed in-app updates.' }}
+      RELEASE_PRERELEASE: ${{ inputs.prerelease || false }}
 
     steps:
       - name: Check out main
@@ -59,7 +67,8 @@ jobs:
           }
 
       - name: Set release version
-        run: npm run version:set -- "${{ inputs.version }}"
+        shell: pwsh
+        run: npm run version:set -- "$env:RELEASE_VERSION"
 
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
@@ -84,7 +93,7 @@ jobs:
           git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "Release v${{ inputs.version }}"
+            git commit -m "Release v$env:RELEASE_VERSION"
             git push origin HEAD:main
           }
           "RELEASE_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
@@ -98,10 +107,10 @@ jobs:
         with:
           tagName: "v__VERSION__"
           releaseName: "WinReclaim v__VERSION__"
-          releaseBody: "${{ inputs.release_notes }}"
+          releaseBody: "${{ env.RELEASE_NOTES }}"
           releaseCommitish: "${{ env.RELEASE_COMMIT }}"
           releaseDraft: false
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ env.RELEASE_PRERELEASE }}
           generateReleaseNotes: true
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
