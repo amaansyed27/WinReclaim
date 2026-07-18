@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T13:50:00Z",
-  "reason": "Fresh release run with captured Rust validation diagnostics"
+  "requestedAt": "2026-07-18T14:47:43Z",
+  "reason": "Fresh release after fixing the Windows icon and unused Rust exports"
 }
