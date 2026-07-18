@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: winreclaim-release
@@ -78,12 +79,78 @@ jobs:
           npm run check
           npm run build
 
-      - name: Validate Rust core
+      - name: Validate Rust formatting, tests and lint
+        id: rust_validation
+        continue-on-error: true
         working-directory: src-tauri
+        shell: pwsh
+        env:
+          CARGO_TERM_COLOR: never
         run: |
-          cargo fmt --check
-          cargo test
-          cargo clippy --all-targets -- -D warnings
+          $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
+          Remove-Item $logPath -Force -ErrorAction SilentlyContinue
+          $script:failed = $false
+
+          function Invoke-CargoCheck {
+            param(
+              [string]$Label,
+              [string[]]$Arguments
+            )
+
+            "### $Label" | Tee-Object -FilePath $logPath -Append
+            & cargo @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
+            $code = $LASTEXITCODE
+            "exit_code=$code" | Tee-Object -FilePath $logPath -Append
+            "" | Tee-Object -FilePath $logPath -Append
+
+            if ($code -ne 0) {
+              $script:failed = $true
+            }
+          }
+
+          Invoke-CargoCheck "cargo fmt --check" @("fmt", "--check")
+          Invoke-CargoCheck "cargo test" @("test")
+          Invoke-CargoCheck "cargo clippy --all-targets -- -D warnings" @("clippy", "--all-targets", "--", "-D", "warnings")
+
+          if ($script:failed) {
+            exit 1
+          }
+
+      - name: Publish Rust failure diagnostics
+        if: steps.rust_validation.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
+          $logText = (Get-Content $logPath -Tail 250) -join "`n"
+          if ($logText.Length -gt 30000) {
+            $logText = $logText.Substring($logText.Length - 30000)
+          }
+
+          $bodyPath = Join-Path $env:RUNNER_TEMP "rust-validation-issue.md"
+          @(
+            "# Automated release diagnostics"
+            ""
+            "- Commit: $env:GITHUB_SHA"
+            "- Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "- Workflow: $env:GITHUB_WORKFLOW"
+            ""
+            "## Rust validation output"
+            ""
+            '```text'
+            $logText
+            '```'
+          ) | Set-Content -Path $bodyPath -Encoding utf8
+
+          $existing = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+          if ([string]::IsNullOrWhiteSpace($existing)) {
+            gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
+          } else {
+            gh issue edit $existing --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
+          }
+
+          throw "Rust validation failed. The compiler output was published to the Automated release diagnostics issue."
 
       - name: Commit release version
         shell: pwsh
