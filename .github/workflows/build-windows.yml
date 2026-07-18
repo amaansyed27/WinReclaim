@@ -9,7 +9,7 @@ on:
         default: "1.0.0"
         type: string
       release_notes:
-        description: "Optional release notes placed above generated notes"
+        description: "Release notes"
         required: false
         default: "Windows 11 x64 release with local-first scanning, safe cleanup plans, receipts, and signed in-app updates."
         type: string
@@ -39,6 +39,7 @@ jobs:
       RELEASE_VERSION: ${{ inputs.version || '1.0.0' }}
       RELEASE_NOTES: ${{ inputs.release_notes || 'Windows 11 x64 release with local-first scanning, safe cleanup plans, receipts, and signed in-app updates.' }}
       RELEASE_PRERELEASE: ${{ inputs.prerelease || false }}
+      CARGO_TERM_COLOR: never
 
     steps:
       - name: Check out main
@@ -58,13 +59,13 @@ jobs:
           targets: x86_64-pc-windows-msvc
           components: rustfmt, clippy
 
-      - name: Verify updater signing secrets
+      - name: Verify updater signing key
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
-            throw "Missing TAURI_SIGNING_PRIVATE_KEY repository secret. Signed updater releases are mandatory."
+            throw "Missing TAURI_SIGNING_PRIVATE_KEY repository secret."
           }
 
       - name: Set release version
@@ -79,120 +80,179 @@ jobs:
           npm run check
           npm run build
 
-      - name: Normalize Rust formatting and machine-applicable lints
-        continue-on-error: true
-        working-directory: src-tauri
-        shell: pwsh
-        env:
-          CARGO_TERM_COLOR: never
-        run: |
-          cargo fmt
-          cargo clippy --fix --all-targets --allow-dirty --allow-staged -- -D warnings
-
-      - name: Validate Rust formatting, tests and lint
+      - name: Validate Rust
         id: rust_validation
         continue-on-error: true
         working-directory: src-tauri
         shell: pwsh
-        env:
-          CARGO_TERM_COLOR: never
         run: |
           $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
           Remove-Item $logPath -Force -ErrorAction SilentlyContinue
-          $script:failed = $false
+          $failed = $false
 
-          function Invoke-CargoCheck {
-            param(
-              [string]$Label,
-              [string[]]$Arguments
-            )
-
+          function Invoke-CargoValidation {
+            param([string]$Label, [string[]]$Arguments)
             "### $Label" | Tee-Object -FilePath $logPath -Append
             & cargo @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
             $code = $LASTEXITCODE
-            "exit_code=$code" | Tee-Object -FilePath $logPath -Append
-            "" | Tee-Object -FilePath $logPath -Append
-
-            if ($code -ne 0) {
-              $script:failed = $true
-            }
+            "exit_code=$code`n" | Tee-Object -FilePath $logPath -Append
+            if ($code -ne 0) { $script:failed = $true }
           }
 
-          Invoke-CargoCheck "cargo fmt --check" @("fmt", "--check")
-          Invoke-CargoCheck "cargo test" @("test")
-          Invoke-CargoCheck "cargo clippy --all-targets -- -D warnings" @("clippy", "--all-targets", "--", "-D", "warnings")
+          Invoke-CargoValidation "cargo fmt --check" @("fmt", "--check")
+          Invoke-CargoValidation "cargo test" @("test", "--quiet")
+          Invoke-CargoValidation "cargo clippy" @("clippy", "--all-targets", "--quiet", "--", "-D", "warnings")
 
-          if ($script:failed) {
-            exit 1
-          }
+          if ($script:failed) { exit 1 }
 
-      - name: Publish Rust failure diagnostics
+      - name: Publish Rust diagnostics
         if: steps.rust_validation.outcome == 'failure'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
-          $logText = (Get-Content $logPath -Tail 250) -join "`n"
-          if ($logText.Length -gt 30000) {
-            $logText = $logText.Substring($logText.Length - 30000)
-          }
-
-          $bodyPath = Join-Path $env:RUNNER_TEMP "rust-validation-issue.md"
+          $logText = (Get-Content $logPath -Tail 350) -join "`n"
+          if ($logText.Length -gt 40000) { $logText = $logText.Substring($logText.Length - 40000) }
+          $bodyPath = Join-Path $env:RUNNER_TEMP "release-diagnostics.md"
           @(
             "# Automated release diagnostics"
             ""
             "- Commit: $env:GITHUB_SHA"
             "- Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-            "- Workflow: $env:GITHUB_WORKFLOW"
+            "- Stage: Rust validation"
             ""
-            "## Rust validation output"
-            ""
-            '```text'
+            "```text"
             $logText
-            '```'
-          ) | Set-Content -Path $bodyPath -Encoding utf8
-
-          $existing = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
-          if ([string]::IsNullOrWhiteSpace($existing)) {
+            "```"
+          ) | Set-Content $bodyPath -Encoding utf8
+          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+          if ([string]::IsNullOrWhiteSpace($issue)) {
             gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
           } else {
-            gh issue edit $existing --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
+            gh issue edit $issue --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
           }
+          throw "Rust validation failed. Diagnostic issue updated."
 
-          throw "Rust validation failed. The compiler output was published to the Automated release diagnostics issue."
-
-      - name: Commit normalized release source
+      - name: Commit release version
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "Prepare release v$env:RELEASE_VERSION"
+            git commit -m "Release v$env:RELEASE_VERSION"
             git push origin HEAD:main
           }
           "RELEASE_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
 
-      - name: Build, sign and publish release
-        uses: tauri-apps/tauri-action@v1
+      - name: Build signed Windows bundles
+        id: tauri_build
+        continue-on-error: true
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: "v__VERSION__"
-          releaseName: "WinReclaim v__VERSION__"
-          releaseBody: "${{ env.RELEASE_NOTES }}"
-          releaseCommitish: "${{ env.RELEASE_COMMIT }}"
-          releaseDraft: false
-          prerelease: ${{ env.RELEASE_PRERELEASE }}
-          generateReleaseNotes: true
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
-          uploadUpdaterSignatures: true
-          uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: "winreclaim-[platform]-[arch]-[bundle]"
-          retryAttempts: 1
-          args: "--target x86_64-pc-windows-msvc"
+        run: |
+          $logPath = Join-Path $env:RUNNER_TEMP "tauri-build.log"
+          npm run tauri build -- --target x86_64-pc-windows-msvc 2>&1 | Tee-Object -FilePath $logPath
+          exit $LASTEXITCODE
+
+      - name: Publish build diagnostics
+        if: steps.tauri_build.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $logPath = Join-Path $env:RUNNER_TEMP "tauri-build.log"
+          $logText = (Get-Content $logPath -Tail 350) -join "`n"
+          if ($logText.Length -gt 40000) { $logText = $logText.Substring($logText.Length - 40000) }
+          $bodyPath = Join-Path $env:RUNNER_TEMP "release-diagnostics.md"
+          @(
+            "# Automated release diagnostics"
+            ""
+            "- Commit: $env:GITHUB_SHA"
+            "- Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "- Stage: Signed Tauri build"
+            ""
+            "```text"
+            $logText
+            "```"
+          ) | Set-Content $bodyPath -Encoding utf8
+          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+          if ([string]::IsNullOrWhiteSpace($issue)) {
+            gh issue create --repo $env:GITHUB_REPOSITORY --title "Automated release diagnostics" --body-file $bodyPath
+          } else {
+            gh issue edit $issue --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
+          }
+          throw "Tauri build failed. Diagnostic issue updated."
+
+      - name: Publish GitHub release and updater manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v$env:RELEASE_VERSION"
+          $bundleRoot = Join-Path $env:GITHUB_WORKSPACE "src-tauri\target\x86_64-pc-windows-msvc\release\bundle"
+          if (-not (Test-Path $bundleRoot)) { throw "Tauri bundle directory was not created: $bundleRoot" }
+
+          $allFiles = @(Get-ChildItem $bundleRoot -Recurse -File)
+          $signatureFile = $allFiles | Where-Object { $_.Name -like "*.nsis.zip.sig" } | Select-Object -First 1
+          if ($null -eq $signatureFile) { throw "No signed NSIS updater artifact was produced." }
+
+          $updaterPath = $signatureFile.FullName.Substring(0, $signatureFile.FullName.Length - 4)
+          if (-not (Test-Path $updaterPath)) { throw "Updater package matching the signature was not found." }
+          $updaterFile = Get-Item $updaterPath
+          $signature = (Get-Content $signatureFile.FullName -Raw).Trim()
+          $encodedName = [uri]::EscapeDataString($updaterFile.Name)
+          $downloadUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedName"
+
+          $manifest = [ordered]@{
+            version = $env:RELEASE_VERSION
+            notes = $env:RELEASE_NOTES
+            pub_date = (Get-Date).ToUniversalTime().ToString("o")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = $signature
+                url = $downloadUrl
+              }
+            }
+          }
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "latest.json"
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content $manifestPath -Encoding utf8
+
+          $assets = @($allFiles | Where-Object {
+            $_.Name -like "*.exe" -or
+            $_.Name -like "*.msi" -or
+            $_.Name -like "*.zip" -or
+            $_.Name -like "*.sig"
+          } | ForEach-Object { $_.FullName })
+          $assets += $manifestPath
+          if ($assets.Count -lt 5) { throw "Expected installers and updater artifacts were not found." }
+
+          gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
+          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" 2>$null
+
+          $arguments = @("release", "create", $tag) + $assets + @(
+            "--repo", $env:GITHUB_REPOSITORY,
+            "--title", "WinReclaim $tag",
+            "--notes", $env:RELEASE_NOTES,
+            "--target", $env:RELEASE_COMMIT
+          )
+          if ($env:RELEASE_PRERELEASE -eq "true") { $arguments += "--prerelease" }
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) { throw "GitHub release publication failed." }
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,assets
+
+      - name: Close resolved diagnostic issue
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $issue = gh issue list --repo $env:GITHUB_REPOSITORY --state open --search '"Automated release diagnostics" in:title' --json number --jq '.[0].number'
+          if (-not [string]::IsNullOrWhiteSpace($issue)) {
+            gh issue close $issue --repo $env:GITHUB_REPOSITORY --comment "Resolved by the successful v$env:RELEASE_VERSION release pipeline."
+          }
