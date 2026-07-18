@@ -1,0 +1,111 @@
+.intent-planner {
+  margin-top: 32px;
+  padding: 22px 0 24px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.intent-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.intent-heading span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.intent-heading h2 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.intent-heading > strong {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.intent-planner form > label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.intent-input-row input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  outline: none;
+  color: var(--ink);
+  background: var(--white);
+}
+
+.intent-input-row input:focus {
+  border-color: var(--green);
+}
+
+.intent-input-row input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.intent-status,
+.intent-summary,
+.intent-privacy {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.intent-status {
+  color: var(--amber);
+}
+
+.intent-summary {
+  padding-left: 12px;
+  border-left: 2px solid var(--green);
+  color: var(--ink);
+}
+
+.intent-privacy {
+  color: var(--muted);
+}
+
+.intent-status code {
+  color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .intent-heading {
+    display: block;
+  }
+
+  .intent-heading > strong {
+    display: block;
+    margin-top: 10px;
+  }
+
+  .intent-input-row {
+    grid-template-columns: 1fr;
+  }
+}
