@@ -5,6 +5,7 @@ import { FindingsView } from "./features/findings/FindingsView";
 import { PlanView } from "./features/plan/PlanView";
 import { ReceiptView } from "./features/receipt/ReceiptView";
 import { ScanView } from "./features/scan/ScanView";
+import { UpdateControl } from "./features/update/UpdateControl";
 import {
   cancelScan,
   createCleanupPlan,
@@ -159,7 +160,7 @@ export function App() {
       <header className="topbar">
         <Brand />
         <StepNav current={step} />
-        <div className="topbar-note">Build Week alpha · local-first</div>
+        <UpdateControl />
       </header>
 
       <main>
