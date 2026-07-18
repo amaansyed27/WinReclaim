@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T15:50:00Z",
-  "reason": "Fresh release after replacing fragile gh search quoting with native PowerShell JSON filtering"
+  "requestedAt": "2026-07-18T16:02:00Z",
+  "reason": "Fresh release after normalizing Rust source and hardening diagnostic reporting"
 }
