@@ -1,34 +1,111 @@
-name: Build Windows installers
+name: Release Windows
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      version:
+        description: "Semantic version to release"
+        required: true
+        default: "1.0.0"
+        type: string
+      release_notes:
+        description: "Optional release notes placed above generated notes"
+        required: false
+        default: "Windows 11 x64 release with local-first scanning, safe cleanup plans, receipts, and signed in-app updates."
+        type: string
+      prerelease:
+        description: "Publish as a prerelease"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: winreclaim-release
+  cancel-in-progress: false
 
 jobs:
-  package:
+  release:
+    name: Build and publish Windows release
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Verify updater signing secrets
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Missing TAURI_SIGNING_PRIVATE_KEY repository secret. Signed updater releases are mandatory."
+          }
+
+      - name: Set release version
+        run: npm run version:set -- "${{ inputs.version }}"
 
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Build MSI and NSIS installers
-        run: npm run tauri build
+      - name: Validate frontend
+        run: |
+          npm run check
+          npm run build
 
-      - name: Upload Windows bundles
-        uses: actions/upload-artifact@v4
+      - name: Validate Rust core
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo test
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Commit release version
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "Release v${{ inputs.version }}"
+            git push origin HEAD:main
+          }
+          "RELEASE_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
+
+      - name: Build, sign and publish release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          name: winreclaim-windows
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: error
+          tagName: "v__VERSION__"
+          releaseName: "WinReclaim v__VERSION__"
+          releaseBody: "${{ inputs.release_notes }}"
+          releaseCommitish: "${{ env.RELEASE_COMMIT }}"
+          releaseDraft: false
+          prerelease: ${{ inputs.prerelease }}
+          generateReleaseNotes: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          uploadUpdaterSignatures: true
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: "winreclaim-[platform]-[arch]-[bundle]"
+          retryAttempts: 1
+          args: "--target x86_64-pc-windows-msvc"
