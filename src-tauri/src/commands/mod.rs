@@ -1,7 +1,9 @@
 use crate::actions::execute_item;
 use crate::domain::{
-    CleanupPlan, CleanupReceipt, CreatePlanRequest, ExecutePlanRequest, ScanReport, ScanRequest,
+    AiStatus, CleanupPlan, CleanupReceipt, CreatePlanRequest, ExecutePlanRequest, IntentRequest,
+    IntentSuggestion, ScanReport, ScanRequest,
 };
+use crate::intent::{ai_status, interpret_intent};
 use crate::planner::{build_plan, verify_plan_hash};
 use crate::platform::windows::disk_snapshot;
 use crate::receipts::persist_receipt;
@@ -40,6 +42,29 @@ pub async fn start_scan(
 #[tauri::command]
 pub fn cancel_scan(state: State<'_, AppState>) {
     state.cancel_scan.store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn get_ai_status() -> AiStatus {
+    ai_status()
+}
+
+#[tauri::command]
+pub async fn interpret_cleanup_intent(
+    state: State<'_, AppState>,
+    request: IntentRequest,
+) -> Result<IntentSuggestion, String> {
+    let report = state
+        .latest_scan
+        .lock()
+        .map_err(|_| "Scan state is unavailable".to_string())?
+        .clone()
+        .ok_or_else(|| "Run a scan before using reclaim-by-intent".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || interpret_intent(&report, request))
+        .await
+        .map_err(|error| format!("Intent task failed: {error}"))?
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -97,11 +122,11 @@ pub async fn execute_cleanup_plan(
 
     let receipt = tauri::async_runtime::spawn_blocking(move || {
         let started_at = Utc::now();
-        let disk_before = disk_snapshot(Path::new(&latest_scan.root))
-            .map_err(|error| error.to_string())?;
+        let disk_before =
+            disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
         let results = plan.items.iter().map(execute_item).collect::<Vec<_>>();
-        let disk_after = disk_snapshot(Path::new(&latest_scan.root))
-            .map_err(|error| error.to_string())?;
+        let disk_after =
+            disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
 
         let receipt = CleanupReceipt {
             id: Uuid::new_v4(),
