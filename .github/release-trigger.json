@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "requestedAt": "2026-07-18T15:07:50Z",
-  "reason": "Fresh release after the native icon generator passed strict Clippy validation"
+  "requestedAt": "2026-07-18T15:20:13Z",
+  "reason": "Fresh release after refactoring strict Clippy findings and normalizing Rust source"
 }
