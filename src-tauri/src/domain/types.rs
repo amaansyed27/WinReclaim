@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum RiskClass {
     SafeNow,
@@ -85,6 +85,34 @@ pub struct ScanReport {
 #[serde(rename_all = "camelCase")]
 pub struct ScanRequest {
     pub root: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiStatus {
+    pub configured: bool,
+    pub model: String,
+    pub privacy_note: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntentRequest {
+    pub scan_id: Uuid,
+    pub prompt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntentSuggestion {
+    pub selected_finding_ids: Vec<Uuid>,
+    pub target_reclaim_bytes: Option<u64>,
+    pub estimated_reclaim_bytes: u64,
+    pub allowed_risk_classes: Vec<RiskClass>,
+    pub excluded_labels: Vec<String>,
+    pub summary: String,
+    pub model: String,
+    pub remote_used: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
