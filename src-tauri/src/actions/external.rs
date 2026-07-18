@@ -59,7 +59,7 @@ fn concise_output(prefix: &str, output: &Output) -> String {
     let text = String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter(|line| !line.trim().is_empty())
-        .last()
+        .next_back()
         .unwrap_or_default()
         .trim()
         .to_string();
