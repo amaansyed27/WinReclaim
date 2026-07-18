@@ -121,18 +121,25 @@ jobs:
             }
 
             $allFiles = @(Get-ChildItem $bundleRoot -Recurse -File)
-            $nsisInstaller = $allFiles | Where-Object { $_.Name -like "*.exe" } | Select-Object -First 1
-            $msiInstaller = $allFiles | Where-Object { $_.Name -like "*.msi" } | Select-Object -First 1
-            $updaterArchive = $allFiles | Where-Object { $_.Name -like "*.nsis.zip" } | Select-Object -First 1
-            $signatureFile = $allFiles | Where-Object { $_.Name -like "*.nsis.zip.sig" } | Select-Object -First 1
+            $nsisInstaller = $allFiles | Where-Object {
+              $_.Extension -eq ".exe" -and $_.DirectoryName -like "*\nsis"
+            } | Select-Object -First 1
+            $msiInstaller = $allFiles | Where-Object {
+              $_.Extension -eq ".msi" -and $_.DirectoryName -like "*\msi"
+            } | Select-Object -First 1
 
             if ($null -eq $nsisInstaller) { throw "NSIS installer was not produced." }
             if ($null -eq $msiInstaller) { throw "MSI installer was not produced." }
-            if ($null -eq $updaterArchive) { throw "NSIS updater archive was not produced." }
-            if ($null -eq $signatureFile) { throw "NSIS updater signature was not produced." }
 
-            $signature = (Get-Content $signatureFile.FullName -Raw).Trim()
-            $encodedName = [uri]::EscapeDataString($updaterArchive.Name)
+            $nsisSignaturePath = "$($nsisInstaller.FullName).sig"
+            $msiSignaturePath = "$($msiInstaller.FullName).sig"
+            if (-not (Test-Path $nsisSignaturePath)) {
+              throw "NSIS updater signature was not produced: $nsisSignaturePath"
+            }
+
+            $nsisSignature = Get-Item $nsisSignaturePath
+            $signature = (Get-Content $nsisSignature.FullName -Raw).Trim()
+            $encodedName = [uri]::EscapeDataString($nsisInstaller.Name)
             $downloadUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedName"
 
             $manifest = [ordered]@{
@@ -152,21 +159,19 @@ jobs:
 
             $assets = @(
               $nsisInstaller.FullName,
+              $nsisSignature.FullName,
               $msiInstaller.FullName,
-              $updaterArchive.FullName,
-              $signatureFile.FullName,
               $manifestPath
             )
+            if (Test-Path $msiSignaturePath) {
+              $assets += $msiSignaturePath
+            }
 
             Write-Host "Release assets:"
             $assets | ForEach-Object { Write-Host " - $_" }
 
-            $previousErrorAction = $ErrorActionPreference
-            $ErrorActionPreference = "SilentlyContinue"
             & gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
             $releaseExists = $LASTEXITCODE -eq 0
-            $ErrorActionPreference = $previousErrorAction
-            $global:LASTEXITCODE = 0
 
             if ($releaseExists) {
               $uploadArguments = @("release", "upload", $tag) + $assets + @(
