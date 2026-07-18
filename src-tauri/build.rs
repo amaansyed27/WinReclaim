@@ -47,7 +47,7 @@ fn generate_windows_icon() {
         }
     }
 
-    let mask_row_bytes = ((ICON_SIZE + 31) / 32) * 4;
+    let mask_row_bytes = ICON_SIZE.div_ceil(32) * 4;
     let and_mask = vec![0_u8; mask_row_bytes * ICON_SIZE];
     let mut dib = Vec::with_capacity(40 + pixels.len() + and_mask.len());
 
