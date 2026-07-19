@@ -16,13 +16,14 @@
         "title": "WinReclaim",
         "width": 1180,
         "height": 780,
-        "minWidth": 800,
-        "minHeight": 600,
+        "minWidth": 760,
+        "minHeight": 540,
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": true,
-        "backgroundColor": "#f3efe4"
+        "decorations": false,
+        "shadow": true,
+        "backgroundColor": "#050a12"
       }
     ],
     "security": {
