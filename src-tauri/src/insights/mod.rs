@@ -159,9 +159,7 @@ pub fn build_reclaim_passports(report: &ScanReport) -> Vec<ReclaimPassport> {
 pub fn recovery_class_for(finding: &Finding) -> RecoveryClass {
     match finding.action_kind {
         Some(ActionKind::UserTemp | ActionKind::CrashDumps) => RecoveryClass::Reversible,
-        Some(ActionKind::HuggingfacePrune | ActionKind::NpmCache) => {
-            RecoveryClass::Redownloadable
-        }
+        Some(ActionKind::HuggingfacePrune | ActionKind::NpmCache) => RecoveryClass::Redownloadable,
         Some(ActionKind::DockerPrune) => RecoveryClass::Irreversible,
         None if finding.risk_class == RiskClass::Protected => RecoveryClass::Protected,
         None if finding.rule_id.starts_with("project.") => RecoveryClass::Rebuildable,
@@ -264,10 +262,7 @@ fn owner_for(finding: &Finding) -> String {
         "Android / Gradle".to_string()
     } else if rule.starts_with("cargo.") || rule == "project.rust_target" {
         "Rust / Cargo".to_string()
-    } else if rule.starts_with("pip.")
-        || rule.starts_with("uv.")
-        || rule == "project.python_venv"
-    {
+    } else if rule.starts_with("pip.") || rule.starts_with("uv.") || rule == "project.python_venv" {
         "Python tooling".to_string()
     } else if rule.starts_with("ollama.") {
         "Ollama".to_string()
@@ -383,7 +378,7 @@ fn load_snapshot_records() -> Result<Vec<SnapshotRecord>> {
             records.push(record);
         }
     }
-    records.sort_by(|left, right| left.captured_at.cmp(&right.captured_at));
+    records.sort_by_key(|record| record.captured_at);
     Ok(records)
 }
 

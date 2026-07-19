@@ -131,7 +131,7 @@ pub fn list_entries() -> Result<Vec<VaultEntry>> {
             entries.push(entry);
         }
     }
-    entries.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.created_at));
     Ok(entries)
 }
 

@@ -79,7 +79,10 @@ fn build_simulation(
 ) -> PlanSimulation {
     let mut simulation = PlanSimulation {
         current_free_bytes: report.disk.free_bytes,
-        projected_free_bytes: report.disk.free_bytes.saturating_add(estimated_reclaim_bytes),
+        projected_free_bytes: report
+            .disk
+            .free_bytes
+            .saturating_add(estimated_reclaim_bytes),
         estimated_reclaim_bytes,
         affected_items: items.len(),
         protected_items_touched: 0,
@@ -92,17 +95,15 @@ fn build_simulation(
                 simulation.reversible_bytes = simulation
                     .reversible_bytes
                     .saturating_add(item.estimated_bytes);
-                simulation.estimated_recovery_minutes = simulation
-                    .estimated_recovery_minutes
-                    .saturating_add(1);
+                simulation.estimated_recovery_minutes =
+                    simulation.estimated_recovery_minutes.saturating_add(1);
             }
             ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
                 simulation.redownloadable_bytes = simulation
                     .redownloadable_bytes
                     .saturating_add(item.estimated_bytes);
-                simulation.estimated_recovery_minutes = simulation
-                    .estimated_recovery_minutes
-                    .saturating_add(8);
+                simulation.estimated_recovery_minutes =
+                    simulation.estimated_recovery_minutes.saturating_add(8);
             }
             ActionKind::DockerPrune => {
                 simulation.irreversible_bytes = simulation

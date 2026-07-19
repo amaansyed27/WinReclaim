@@ -4,9 +4,7 @@ use crate::domain::{
     IntentSuggestion, ReclaimPassport, RestoreRequest, RestoreResult, ScanReport, ScanRequest,
     StorageTimeline, VaultEntry,
 };
-use crate::insights::{
-    build_reclaim_passports, build_storage_timeline, persist_scan_snapshot,
-};
+use crate::insights::{build_reclaim_passports, build_storage_timeline, persist_scan_snapshot};
 use crate::intent::{ai_status, interpret_intent};
 use crate::planner::{build_plan, verify_plan_hash};
 use crate::platform::windows::disk_snapshot;
@@ -36,9 +34,9 @@ pub async fn start_scan(
             .map_err(|error| error.to_string())?;
 
     if let Err(error) = persist_scan_snapshot(&result) {
-        result
-            .errors
-            .push(format!("Storage timeline snapshot could not be saved: {error}"));
+        result.errors.push(format!(
+            "Storage timeline snapshot could not be saved: {error}"
+        ));
     }
 
     *app_state

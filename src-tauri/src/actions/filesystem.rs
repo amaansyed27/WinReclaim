@@ -207,13 +207,9 @@ mod tests {
         let arbitrary =
             std::env::temp_dir().join(format!("winreclaim-arbitrary-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&arbitrary).unwrap();
-        assert!(quarantine_user_temp(
-            &arbitrary,
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            "Fixture"
-        )
-        .is_err());
+        assert!(
+            quarantine_user_temp(&arbitrary, Uuid::new_v4(), Uuid::new_v4(), "Fixture").is_err()
+        );
         fs::remove_dir_all(arbitrary).unwrap();
     }
 }

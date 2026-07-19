@@ -277,6 +277,11 @@ mod tests {
             max_findings: 10,
             include_app_data: true,
         };
-        assert!(should_skip_directory(&root, &internal, "winreclaim", options));
+        assert!(should_skip_directory(
+            &root,
+            &internal,
+            "winreclaim",
+            options
+        ));
     }
 }
