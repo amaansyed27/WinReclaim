@@ -5,9 +5,13 @@ import type {
   CleanupPlan,
   CleanupReceipt,
   IntentSuggestion,
+  ReclaimPassport,
+  RestoreResult,
   ScanOptions,
   ScanProgress,
-  ScanReport
+  ScanReport,
+  StorageTimeline,
+  VaultEntry
 } from "../types";
 
 export async function startScan(options: ScanOptions): Promise<ScanReport> {
@@ -51,6 +55,24 @@ export async function executeCleanupPlan(
 
 export async function listReceipts(): Promise<CleanupReceipt[]> {
   return invoke<CleanupReceipt[]>("list_receipts");
+}
+
+export async function getStorageTimeline(): Promise<StorageTimeline> {
+  return invoke<StorageTimeline>("get_storage_timeline");
+}
+
+export async function getReclaimPassports(scanId: string): Promise<ReclaimPassport[]> {
+  return invoke<ReclaimPassport[]>("get_reclaim_passports", { scanId });
+}
+
+export async function listVaultEntries(): Promise<VaultEntry[]> {
+  return invoke<VaultEntry[]>("list_vault_entries");
+}
+
+export async function restoreVaultEntry(vaultEntryId: string): Promise<RestoreResult> {
+  return invoke<RestoreResult>("restore_vault_entry", {
+    request: { vaultEntryId }
+  });
 }
 
 export async function onScanProgress(
