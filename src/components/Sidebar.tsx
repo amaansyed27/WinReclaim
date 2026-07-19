@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AppStep } from "../App";
 import { UpdateControl } from "../features/update/UpdateControl";
 
@@ -8,7 +9,7 @@ interface SidebarProps {
   onNavigate: (step: AppStep) => void;
 }
 
-const items: { id: AppStep; label: string; icon: JSX.Element }[] = [
+const items: { id: AppStep; label: string; icon: ReactNode }[] = [
   {
     id: "scan",
     label: "Scan",
