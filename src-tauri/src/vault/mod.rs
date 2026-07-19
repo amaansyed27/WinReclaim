@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use chrono::{Duration, Utc};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
 use uuid::Uuid;
 
 const RETENTION_DAYS: i64 = 7;
@@ -11,6 +12,7 @@ const RETENTION_DAYS: i64 = 7;
 pub struct QuarantineOutcome {
     pub moved_entries: u64,
     pub skipped_entries: u64,
+    pub compressed: bool,
     pub entry: Option<VaultEntry>,
 }
 
@@ -25,6 +27,7 @@ pub fn quarantine_files(
         return Ok(QuarantineOutcome {
             moved_entries: 0,
             skipped_entries: 0,
+            compressed: false,
             entry: None,
         });
     }
@@ -75,10 +78,12 @@ pub fn quarantine_files(
         return Ok(QuarantineOutcome {
             moved_entries,
             skipped_entries,
+            compressed: false,
             entry: None,
         });
     }
 
+    let compressed = compress_payload(&payload_root);
     let created_at = Utc::now();
     let expires_at = created_at + Duration::days(RETENTION_DAYS);
     let entry = VaultEntry {
@@ -100,6 +105,7 @@ pub fn quarantine_files(
     Ok(QuarantineOutcome {
         moved_entries,
         skipped_entries,
+        compressed,
         entry: Some(entry),
     })
 }
@@ -265,6 +271,21 @@ fn move_file(source: &Path, destination: &Path) -> Result<()> {
             Ok(())
         }
     }
+}
+
+#[cfg(windows)]
+fn compress_payload(payload_root: &Path) -> bool {
+    let recursive = format!("/S:{}", payload_root.to_string_lossy());
+    Command::new("compact.exe")
+        .args(["/C", recursive.as_str(), "/I", "/Q"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(windows))]
+fn compress_payload(_payload_root: &Path) -> bool {
+    false
 }
 
 fn is_safe_relative(path: &Path) -> bool {
