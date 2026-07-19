@@ -1,6 +1,6 @@
 use crate::domain::{
-    ActionKind, Confidence, Finding, ReclaimPassport, RecoveryClass, ScanReport, SnapshotSummary,
-    StorageTimeline, TimelineDelta,
+    ActionKind, Confidence, Finding, ReclaimPassport, RecoveryClass, RiskClass, ScanReport,
+    SnapshotSummary, StorageTimeline, TimelineDelta,
 };
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -56,32 +56,24 @@ pub fn persist_scan_snapshot(report: &ScanReport) -> Result<()> {
         findings: report
             .findings
             .iter()
-            .map(|finding| SnapshotFinding {
-                key: finding_key(finding),
-                display_name: finding.display_name.clone(),
-                category: finding.category.clone(),
-                path: finding.path.clone(),
-                owner: owner_for(finding),
-                estimated_bytes: finding.estimated_bytes,
-                confidence_score: confidence_score(finding),
-                recovery_class: recovery_class_for(finding),
-                action_available: finding.action_available,
-            })
+            .map(snapshot_finding)
             .collect(),
     };
-    fs::write(
-        root.join(format!("{}-{}.json", snapshot.captured_at.timestamp_millis(), snapshot.id)),
-        serde_json::to_vec_pretty(&snapshot)?,
-    )?;
+    let filename = format!(
+        "{}-{}.json",
+        snapshot.captured_at.timestamp_millis(),
+        snapshot.id
+    );
+    fs::write(root.join(filename), serde_json::to_vec_pretty(&snapshot)?)?;
     prune_snapshots(&root)?;
     Ok(())
 }
 
 pub fn build_storage_timeline() -> Result<StorageTimeline> {
     let records = load_snapshot_records()?;
-    if records.is_empty() {
+    let Some(latest) = records.last() else {
         return Ok(StorageTimeline::default());
-    }
+    };
 
     let snapshots = records
         .iter()
@@ -96,7 +88,6 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
         })
         .collect::<Vec<_>>();
 
-    let latest = records.last().expect("records is not empty");
     let previous = records.get(records.len().saturating_sub(2));
     let mut deltas = Vec::new();
     let mut reclaimable_growth_bytes = 0_u64;
@@ -105,17 +96,17 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
         let previous_map = previous
             .findings
             .iter()
-            .map(|finding| (finding.key.clone(), finding))
+            .map(|finding| (finding.key.as_str(), finding))
             .collect::<HashMap<_, _>>();
         let current_map = latest
             .findings
             .iter()
-            .map(|finding| (finding.key.clone(), finding))
+            .map(|finding| (finding.key.as_str(), finding))
             .collect::<HashMap<_, _>>();
 
         for finding in &latest.findings {
             let previous_bytes = previous_map
-                .get(&finding.key)
+                .get(finding.key.as_str())
                 .map(|candidate| candidate.estimated_bytes)
                 .unwrap_or_default();
             let delta_bytes = signed_delta(finding.estimated_bytes, previous_bytes);
@@ -123,38 +114,21 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
                 continue;
             }
             if delta_bytes > 0 && finding.action_available {
-                reclaimable_growth_bytes = reclaimable_growth_bytes.saturating_add(delta_bytes as u64);
+                reclaimable_growth_bytes =
+                    reclaimable_growth_bytes.saturating_add(delta_bytes.unsigned_abs());
             }
-            deltas.push(TimelineDelta {
-                key: finding.key.clone(),
-                display_name: finding.display_name.clone(),
-                category: finding.category.clone(),
-                path: finding.path.clone(),
-                owner: finding.owner.clone(),
-                previous_bytes,
-                current_bytes: finding.estimated_bytes,
-                delta_bytes,
-                confidence_score: finding.confidence_score,
-                recovery_class: finding.recovery_class,
-            });
+            deltas.push(delta_from(finding, previous_bytes, delta_bytes));
         }
 
         for finding in &previous.findings {
-            if current_map.contains_key(&finding.key) {
+            if current_map.contains_key(finding.key.as_str()) {
                 continue;
             }
-            deltas.push(TimelineDelta {
-                key: finding.key.clone(),
-                display_name: finding.display_name.clone(),
-                category: finding.category.clone(),
-                path: finding.path.clone(),
-                owner: finding.owner.clone(),
-                previous_bytes: finding.estimated_bytes,
-                current_bytes: 0,
-                delta_bytes: signed_delta(0, finding.estimated_bytes),
-                confidence_score: finding.confidence_score,
-                recovery_class: finding.recovery_class,
-            });
+            deltas.push(delta_from(
+                finding,
+                finding.estimated_bytes,
+                signed_delta(0, finding.estimated_bytes),
+            ));
         }
     }
 
@@ -183,21 +157,48 @@ pub fn recovery_class_for(finding: &Finding) -> RecoveryClass {
             RecoveryClass::Redownloadable
         }
         Some(ActionKind::DockerPrune) => RecoveryClass::Irreversible,
-        None if matches!(finding.risk_class, crate::domain::RiskClass::Protected) => {
-            RecoveryClass::Protected
-        }
+        None if finding.risk_class == RiskClass::Protected => RecoveryClass::Protected,
         None if finding.rule_id.starts_with("project.") => RecoveryClass::Rebuildable,
-        None if matches!(finding.risk_class, crate::domain::RiskClass::RebuildOrRedownload) => {
+        None if finding.risk_class == RiskClass::RebuildOrRedownload => {
             RecoveryClass::Redownloadable
         }
         None => RecoveryClass::Irreversible,
     }
 }
 
+fn snapshot_finding(finding: &Finding) -> SnapshotFinding {
+    SnapshotFinding {
+        key: finding_key(finding),
+        display_name: finding.display_name.clone(),
+        category: finding.category.clone(),
+        path: finding.path.clone(),
+        owner: owner_for(finding),
+        estimated_bytes: finding.estimated_bytes,
+        confidence_score: confidence_score(finding),
+        recovery_class: recovery_class_for(finding),
+        action_available: finding.action_available,
+    }
+}
+
+fn delta_from(finding: &SnapshotFinding, previous_bytes: u64, delta_bytes: i64) -> TimelineDelta {
+    TimelineDelta {
+        key: finding.key.clone(),
+        display_name: finding.display_name.clone(),
+        category: finding.category.clone(),
+        path: finding.path.clone(),
+        owner: finding.owner.clone(),
+        previous_bytes,
+        current_bytes: finding.estimated_bytes,
+        delta_bytes,
+        confidence_score: finding.confidence_score,
+        recovery_class: finding.recovery_class,
+    }
+}
+
 fn passport_for(finding: &Finding) -> ReclaimPassport {
     let recovery_class = recovery_class_for(finding);
     let last_changed_at = modified_at(Path::new(&finding.path));
-    let activity_note = activity_note(last_changed_at);
+    let activity_note = activity_note(last_changed_at.as_ref());
     let recovery_method = match recovery_class {
         RecoveryClass::Reversible => {
             "Restore from the WinReclaim Undo Vault before the seven-day expiry".to_string()
@@ -221,11 +222,11 @@ fn passport_for(finding: &Finding) -> ReclaimPassport {
         format!("Safety class: {:?}", finding.risk_class),
         format!("Classifier confidence: {:?}", finding.confidence),
     ];
-    if finding.action_available {
-        evidence.push("A compiled Rust cleanup adapter is available".to_string());
+    evidence.push(if finding.action_available {
+        "A compiled Rust cleanup adapter is available".to_string()
     } else {
-        evidence.push("Inspection only; no cleanup adapter is exposed".to_string());
-    }
+        "Inspection only; no cleanup adapter is exposed".to_string()
+    });
 
     ReclaimPassport {
         finding_id: finding.id,
@@ -275,7 +276,7 @@ fn owner_for(finding: &Finding) -> String {
 }
 
 fn confidence_score(finding: &Finding) -> u8 {
-    let base = match finding.confidence {
+    let base: u8 = match finding.confidence {
         Confidence::High => 94,
         Confidence::Medium => 79,
         Confidence::Low => 58,
@@ -311,11 +312,11 @@ fn recovery_method_for_rebuild(finding: &Finding) -> String {
     }
 }
 
-fn activity_note(last_changed_at: Option<DateTime<Utc>>) -> String {
+fn activity_note(last_changed_at: Option<&DateTime<Utc>>) -> String {
     let Some(changed_at) = last_changed_at else {
         return "Filesystem activity time is unavailable".to_string();
     };
-    let age = Utc::now().signed_duration_since(changed_at);
+    let age = Utc::now().signed_duration_since(*changed_at);
     if age.num_hours() < 24 {
         "Changed within the last day; treat as active".to_string()
     } else if age.num_days() < 7 {
@@ -323,7 +324,10 @@ fn activity_note(last_changed_at: Option<DateTime<Utc>>) -> String {
     } else if age.num_days() < 30 {
         format!("No directory-level change for {} days", age.num_days())
     } else {
-        format!("No directory-level change for about {} months", age.num_days() / 30)
+        format!(
+            "No directory-level change for about {} months",
+            age.num_days() / 30
+        )
     }
 }
 
@@ -340,13 +344,9 @@ fn finding_key(finding: &Finding) -> String {
 
 fn signed_delta(current: u64, previous: u64) -> i64 {
     if current >= previous {
-        current
-            .saturating_sub(previous)
-            .min(i64::MAX as u64) as i64
+        current.saturating_sub(previous).min(i64::MAX as u64) as i64
     } else {
-        -(previous
-            .saturating_sub(current)
-            .min(i64::MAX as u64) as i64)
+        -(previous.saturating_sub(current).min(i64::MAX as u64) as i64)
     }
 }
 
@@ -372,13 +372,13 @@ fn load_snapshot_records() -> Result<Vec<SnapshotRecord>> {
             records.push(record);
         }
     }
-    records.sort_by_key(|record| record.captured_at);
+    records.sort_by(|left, right| left.captured_at.cmp(&right.captured_at));
     Ok(records)
 }
 
 fn prune_snapshots(root: &Path) -> Result<()> {
     let mut files = fs::read_dir(root)?
-        .filter_map(Result::ok)
+        .filter_map(|entry| entry.ok())
         .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("json"))
         .collect::<Vec<_>>();
     files.sort_by_key(|entry| entry.file_name());
