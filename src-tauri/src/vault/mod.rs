@@ -80,6 +80,7 @@ pub fn quarantine_files(
     }
 
     let created_at = Utc::now();
+    let expires_at = created_at + Duration::days(RETENTION_DAYS);
     let entry = VaultEntry {
         id,
         receipt_id,
@@ -90,7 +91,7 @@ pub fn quarantine_files(
         relative_paths,
         stored_bytes,
         created_at,
-        expires_at: created_at + Duration::days(RETENTION_DAYS),
+        expires_at,
         restored_at: None,
         status: VaultStatus::Active,
     };
@@ -124,7 +125,7 @@ pub fn list_entries() -> Result<Vec<VaultEntry>> {
             entries.push(entry);
         }
     }
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.created_at));
+    entries.sort_by(|left, right| right.created_at.cmp(&left.created_at));
     Ok(entries)
 }
 
@@ -165,7 +166,9 @@ pub fn restore_entry(id: Uuid) -> Result<RestoreResult> {
                 continue;
             }
         }
-        let bytes = fs::metadata(&source).map(|metadata| metadata.len()).unwrap_or_default();
+        let bytes = fs::metadata(&source)
+            .map(|metadata| metadata.len())
+            .unwrap_or_default();
         if move_file(&source, &destination).is_err() {
             skipped_entries = skipped_entries.saturating_add(1);
             continue;
@@ -177,7 +180,7 @@ pub fn restore_entry(id: Uuid) -> Result<RestoreResult> {
     let remaining = entry
         .relative_paths
         .iter()
-        .filter(|relative| PathBuf::from(&entry.payload_root).join(relative).exists())
+        .filter(|relative| payload_root.join(relative).exists())
         .count();
     entry.restored_at = Some(Utc::now());
     entry.status = if remaining == 0 {
@@ -187,7 +190,7 @@ pub fn restore_entry(id: Uuid) -> Result<RestoreResult> {
     };
     persist_entry(&entry)?;
     if remaining == 0 {
-        let _ = fs::remove_dir_all(PathBuf::from(&entry.payload_root));
+        let _ = fs::remove_dir_all(&payload_root);
     }
 
     Ok(RestoreResult {
@@ -246,7 +249,10 @@ fn load_entry(id: Uuid) -> Result<VaultEntry> {
 fn persist_entry(entry: &VaultEntry) -> Result<()> {
     let root = entry_root(entry.id);
     fs::create_dir_all(&root)?;
-    fs::write(root.join("manifest.json"), serde_json::to_vec_pretty(entry)?)?;
+    fs::write(
+        root.join("manifest.json"),
+        serde_json::to_vec_pretty(entry)?,
+    )?;
     Ok(())
 }
 
