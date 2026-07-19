@@ -45,88 +45,23 @@ jobs:
           python scripts/apply_classic_cleanup.py 2>&1 | Tee-Object -FilePath $log
           exit $LASTEXITCODE
 
-      - name: Complete enum integration
+      - name: Complete integration
+        id: integration
         if: steps.migration.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: |
-          @'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              target = Path(path)
-              text = target.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f"Expected one match in {path}, found {count}")
-              target.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
-
-          replace_once(
-              "src/features/plan/PlanView.tsx",
-              '''const recoveryLabels: Record<ActionKind, string> = {
-            user_temp: "Undo Vault",
-            crash_dumps: "Undo Vault",
-            huggingface_prune: "Redownloadable",
-            npm_cache: "Redownloadable",
-            docker_prune: "Irreversible"
-          };''',
-              '''const recoveryLabels: Record<ActionKind, string> = {
-            user_temp: "Undo Vault",
-            system_temp: "Irreversible",
-            prefetch: "Rebuildable",
-            recycle_bin: "Irreversible",
-            crash_dumps: "Undo Vault",
-            huggingface_prune: "Redownloadable",
-            npm_cache: "Redownloadable",
-            docker_prune: "Irreversible"
-          };''',
-          )
-
-          replace_once(
-              "src-tauri/src/planner/mod.rs",
-              '''            ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
-                          simulation.redownloadable_bytes = simulation
-                              .redownloadable_bytes
-                              .saturating_add(item.estimated_bytes);
-                          simulation.estimated_recovery_minutes =
-                              simulation.estimated_recovery_minutes.saturating_add(8);
-                      }
-                      ActionKind::DockerPrune => {''',
-              '''            ActionKind::Prefetch => {
-                          simulation.rebuildable_bytes = simulation
-                              .rebuildable_bytes
-                              .saturating_add(item.estimated_bytes);
-                          simulation.estimated_recovery_minutes =
-                              simulation.estimated_recovery_minutes.saturating_add(2);
-                      }
-                      ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
-                          simulation.redownloadable_bytes = simulation
-                              .redownloadable_bytes
-                              .saturating_add(item.estimated_bytes);
-                          simulation.estimated_recovery_minutes =
-                              simulation.estimated_recovery_minutes.saturating_add(8);
-                      }
-                      ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune => {''',
-          )
-
-          replace_once(
-              "src-tauri/src/scanner/profile.rs",
-              '''        findings.extend(system_caches.findings);
-                  completed_targets += 1;
-              }
-          ''',
-              '''        findings.extend(system_caches.findings);
-              }
-          ''',
-          )
-          '@ | python -
+          $log = Join-Path $env:RUNNER_TEMP "classic-integration.log"
+          python scripts/fix_classic_cleanup.py 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
 
       - name: Install dependencies
-        if: steps.migration.outcome == 'success'
+        if: steps.migration.outcome == 'success' && steps.integration.outcome == 'success'
         run: npm install --no-audit --no-fund
 
       - name: Validate frontend
         id: frontend
-        if: steps.migration.outcome == 'success'
+        if: steps.migration.outcome == 'success' && steps.integration.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
@@ -138,7 +73,7 @@ jobs:
 
       - name: Validate Rust
         id: rust
-        if: steps.migration.outcome == 'success'
+        if: steps.migration.outcome == 'success' && steps.integration.outcome == 'success'
         continue-on-error: true
         working-directory: src-tauri
         shell: pwsh
@@ -153,10 +88,11 @@ jobs:
 
       - name: Commit validated implementation
         id: commit
-        if: steps.migration.outcome == 'success' && steps.frontend.outcome == 'success' && steps.rust.outcome == 'success'
+        if: steps.migration.outcome == 'success' && steps.integration.outcome == 'success' && steps.frontend.outcome == 'success' && steps.rust.outcome == 'success'
         shell: pwsh
         run: |
           Remove-Item scripts/apply_classic_cleanup.py -Force
+          Remove-Item scripts/fix_classic_cleanup.py -Force
           Remove-Item .github/workflows/apply-classic-cleanup.yml -Force
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -172,12 +108,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $migrationPath = Join-Path $env:RUNNER_TEMP "classic-migration.log"
+          $integrationPath = Join-Path $env:RUNNER_TEMP "classic-integration.log"
           $frontendPath = Join-Path $env:RUNNER_TEMP "classic-frontend.log"
           $rustPath = Join-Path $env:RUNNER_TEMP "classic-rust.log"
           $migrationLog = if (Test-Path $migrationPath) { (Get-Content $migrationPath -Tail 180) -join "`n" } else { "not run" }
+          $integrationLog = if (Test-Path $integrationPath) { (Get-Content $integrationPath -Tail 180) -join "`n" } else { "not run" }
           $frontendLog = if (Test-Path $frontendPath) { (Get-Content $frontendPath -Tail 180) -join "`n" } else { "not run" }
           $rustLog = if (Test-Path $rustPath) { (Get-Content $rustPath -Tail 260) -join "`n" } else { "not run" }
-          $success = "${{ steps.migration.outcome }}" -eq "success" -and "${{ steps.frontend.outcome }}" -eq "success" -and "${{ steps.rust.outcome }}" -eq "success" -and "${{ steps.commit.outcome }}" -eq "success"
+          $success = "${{ steps.migration.outcome }}" -eq "success" -and "${{ steps.integration.outcome }}" -eq "success" -and "${{ steps.frontend.outcome }}" -eq "success" -and "${{ steps.rust.outcome }}" -eq "success" -and "${{ steps.commit.outcome }}" -eq "success"
           $body = Join-Path $env:RUNNER_TEMP "classic-cleanup-validation.md"
           @(
             "# Classic cleanup and system-drive cache validation"
@@ -185,6 +123,7 @@ jobs:
             "Source commit: $env:GITHUB_SHA"
             "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             "Migration: ${{ steps.migration.outcome }}"
+            "Integration: ${{ steps.integration.outcome }}"
             "Frontend: ${{ steps.frontend.outcome }}"
             "Rust: ${{ steps.rust.outcome }}"
             "Commit: ${{ steps.commit.outcome }}"
@@ -193,6 +132,11 @@ jobs:
             "## Migration"
             '```text'
             $migrationLog
+            '```'
+            ""
+            "## Integration"
+            '```text'
+            $integrationLog
             '```'
             ""
             "## Frontend"
