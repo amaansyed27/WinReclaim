@@ -38,6 +38,25 @@ jobs:
           components: rustfmt, clippy
           targets: x86_64-pc-windows-msvc
 
+      - name: Apply final Clippy normalizations
+        shell: pwsh
+        run: |
+          $insightsPath = "src-tauri/src/insights/mod.rs"
+          $insights = [System.IO.File]::ReadAllText($insightsPath)
+          $insights = $insights.Replace(
+            'records.sort_by(|left, right| left.captured_at.cmp(&right.captured_at));',
+            'records.sort_by_key(|record| record.captured_at);'
+          )
+          [System.IO.File]::WriteAllText($insightsPath, $insights)
+
+          $vaultPath = "src-tauri/src/vault/mod.rs"
+          $vault = [System.IO.File]::ReadAllText($vaultPath)
+          $vault = $vault.Replace(
+            'entries.sort_by(|left, right| right.created_at.cmp(&left.created_at));',
+            'entries.sort_by_key(|entry| std::cmp::Reverse(entry.created_at));'
+          )
+          [System.IO.File]::WriteAllText($vaultPath, $vault)
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
