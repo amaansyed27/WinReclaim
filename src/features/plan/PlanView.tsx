@@ -12,6 +12,9 @@ interface PlanViewProps {
 
 const recoveryLabels: Record<ActionKind, string> = {
   user_temp: "Undo Vault",
+  system_temp: "Irreversible",
+  prefetch: "Rebuildable",
+  recycle_bin: "Irreversible",
   crash_dumps: "Undo Vault",
   huggingface_prune: "Redownloadable",
   npm_cache: "Redownloadable",

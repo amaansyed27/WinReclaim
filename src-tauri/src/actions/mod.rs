@@ -2,7 +2,8 @@ mod external;
 mod filesystem;
 
 use crate::domain::{ActionKind, ActionResult, CleanupPlanItem, RecoveryClass};
-use crate::scanner::directory_size;
+use crate::platform::windows::empty_recycle_bin;
+use crate::scanner::{directory_size, recycle_bin_size};
 use anyhow::Result;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -11,7 +12,7 @@ use uuid::Uuid;
 pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
     let target = Path::new(&item.path);
     let cancel = AtomicBool::new(false);
-    let measured_before = directory_size(target, &cancel).bytes;
+    let measured_before = measure_target(item.action_kind, target, &cancel);
     let recovery_class = recovery_class(item.action_kind);
 
     let outcome: Result<(u64, u64, String, Vec<Uuid>)> = match item.action_kind {
@@ -27,6 +28,30 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
                 outcome.skipped_entries,
                 outcome.message,
                 outcome.vault_entry_ids,
+            )
+        }),
+        ActionKind::SystemTemp => filesystem::clean_system_temp(target).map(|outcome| {
+            (
+                outcome.affected_entries,
+                outcome.skipped_entries,
+                outcome.message,
+                outcome.vault_entry_ids,
+            )
+        }),
+        ActionKind::Prefetch => filesystem::clean_prefetch(target).map(|outcome| {
+            (
+                outcome.affected_entries,
+                outcome.skipped_entries,
+                outcome.message,
+                outcome.vault_entry_ids,
+            )
+        }),
+        ActionKind::RecycleBin => empty_recycle_bin().map(|()| {
+            (
+                0,
+                0,
+                "Emptied the Recycle Bin on the Windows installation drive through the native Windows Shell API".to_string(),
+                Vec::new(),
             )
         }),
         ActionKind::CrashDumps => filesystem::quarantine_crash_dumps(
@@ -50,7 +75,7 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
         ActionKind::DockerPrune => external::prune_docker()
             .map(|(deleted, skipped, message)| (deleted, skipped, message, Vec::new())),
     };
-    let measured_after = directory_size(target, &cancel).bytes;
+    let measured_after = measure_target(item.action_kind, target, &cancel);
 
     match outcome {
         Ok((deleted, skipped, message, vault_entry_ids)) => ActionResult {
@@ -82,10 +107,20 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
     }
 }
 
+fn measure_target(action: ActionKind, target: &Path, cancel: &AtomicBool) -> u64 {
+    match action {
+        ActionKind::RecycleBin => recycle_bin_size().bytes,
+        _ => directory_size(target, cancel).bytes,
+    }
+}
+
 fn recovery_class(action: ActionKind) -> RecoveryClass {
     match action {
         ActionKind::UserTemp | ActionKind::CrashDumps => RecoveryClass::Reversible,
+        ActionKind::Prefetch => RecoveryClass::Rebuildable,
         ActionKind::HuggingfacePrune | ActionKind::NpmCache => RecoveryClass::Redownloadable,
-        ActionKind::DockerPrune => RecoveryClass::Irreversible,
+        ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune => {
+            RecoveryClass::Irreversible
+        }
     }
 }

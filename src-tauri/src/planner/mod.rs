@@ -98,6 +98,13 @@ fn build_simulation(
                 simulation.estimated_recovery_minutes =
                     simulation.estimated_recovery_minutes.saturating_add(1);
             }
+            ActionKind::Prefetch => {
+                simulation.rebuildable_bytes = simulation
+                    .rebuildable_bytes
+                    .saturating_add(item.estimated_bytes);
+                simulation.estimated_recovery_minutes =
+                    simulation.estimated_recovery_minutes.saturating_add(2);
+            }
             ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
                 simulation.redownloadable_bytes = simulation
                     .redownloadable_bytes
@@ -105,7 +112,7 @@ fn build_simulation(
                 simulation.estimated_recovery_minutes =
                     simulation.estimated_recovery_minutes.saturating_add(8);
             }
-            ActionKind::DockerPrune => {
+            ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune => {
                 simulation.irreversible_bytes = simulation
                     .irreversible_bytes
                     .saturating_add(item.estimated_bytes);

@@ -158,12 +158,11 @@ pub async fn execute_cleanup_plan(
             results,
             vault_entry_ids,
             protected_summary: vec![
-                "Prefetch".into(),
                 "Browser profiles".into(),
                 "Ollama models".into(),
                 "Docker volumes".into(),
                 "Android emulators".into(),
-                "Windows directories".into(),
+                "Unverified Windows directories".into(),
                 "Project source".into(),
             ],
             rule_set_version: plan.rule_set_version.clone(),

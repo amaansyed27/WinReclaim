@@ -2,7 +2,7 @@
 
 ## Non-negotiable protections
 
-WinReclaim never automatically removes Prefetch, registry data, browser profiles, Ollama models, Docker volumes, Android virtual devices, Android SDK packages, Windows directories, Program Files or project source.
+WinReclaim never automatically removes registry data, browser profiles, Ollama models, Docker volumes, Android virtual devices, Android SDK packages, unverified Windows directories, Program Files or project source. Prefetch is exposed only as a manually selected Review first action, restricted to `.pf` files under the exact active Windows Prefetch root.
 
 ## AI authority boundary
 
@@ -16,11 +16,11 @@ The frontend submits finding IDs, not paths. The Rust planner resolves those IDs
 
 ## Filesystem actions
 
-Filesystem cleanup validates canonical target paths against compiled allowed roots. Reparse points and links are rejected. Locked files are skipped instead of forcefully removed.
+Filesystem cleanup validates canonical target paths against compiled allowed roots. Reparse points and links are rejected. Locked files are skipped instead of forcefully removed. `%TEMP%` remains reversible through the compressed vault; Windows Temp and Prefetch are explicit exact-root actions and are labelled with their recovery consequences.
 
 ## External commands
 
-External adapters use `std::process::Command` with explicit argument arrays. No command is passed through a shell. Windows command shims such as `npm.cmd` are resolved by compiled platform code, not by invoking a shell.
+External adapters use `std::process::Command` with explicit argument arrays. No user-controlled command is passed through a shell. Windows command shims such as `npm.cmd` are resolved by compiled platform code. Recycle Bin inspection and emptying use the native Windows Shell API rather than a script.
 
 ## Verification
 

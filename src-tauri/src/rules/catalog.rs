@@ -1,10 +1,13 @@
 use crate::domain::{ActionKind, Confidence, Finding, RiskClass};
-use crate::platform::windows::{local_app_data, roaming_app_data, user_profile};
+use crate::platform::windows::{
+    local_app_data, program_data, roaming_app_data, system_drive_root, user_profile, user_temp,
+    windows_directory,
+};
 use anyhow::Result;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub const RULE_SET_VERSION: &str = "2026.07-alpha.1";
+pub const RULE_SET_VERSION: &str = "2026.07-alpha.2";
 
 type RuleIdentity = (&'static str, &'static str, &'static str);
 
@@ -47,15 +50,106 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
     let user = user_profile()?;
     let local = local_app_data().unwrap_or_else(|| user.join("AppData").join("Local"));
     let roaming = roaming_app_data().unwrap_or_else(|| user.join("AppData").join("Roaming"));
+    let windows = windows_directory()?;
+    let system_drive = system_drive_root()?;
+    let program_data = program_data()?;
 
     Ok(vec![
         target(
-            ("windows.user_temp", "User temporary files", "Windows"),
-            local.join("Temp"),
+            ("windows.user_temp", "User Temp (%TEMP%)", "Classic Windows cleanup"),
+            user_temp()?,
             RiskClass::SafeNow,
-            "Temporary files created by applications for short-lived work.",
-            "Only files older than seven days are eligible. Active and locked files are skipped.",
+            "The current user's %TEMP% folder used by applications for short-lived work.",
+            "Only files older than seven days are eligible. Active and locked files are skipped and eligible files enter the compressed Undo Vault.",
             Some(ActionKind::UserTemp),
+        ),
+        target(
+            ("system_drive.windows_temp", "Windows Temp", "Classic Windows cleanup"),
+            windows.join("Temp"),
+            RiskClass::SafeNow,
+            "Machine-level temporary files under the active Windows installation.",
+            "Only unlocked files older than seven days are removed. This exact-root action may require administrator rights and is not reversible.",
+            Some(ActionKind::SystemTemp),
+        ),
+        target(
+            ("system_drive.prefetch", "Windows Prefetch", "Classic Windows cleanup"),
+            windows.join("Prefetch"),
+            RiskClass::ReviewFirst,
+            "Windows launch traces used to optimise application and boot startup.",
+            "Only .pf files are removed after explicit review. Windows rebuilds them, and launches may be temporarily slower. Administrator rights may be required.",
+            Some(ActionKind::Prefetch),
+        ),
+        target(
+            ("system_drive.recycle_bin", "Recycle Bin", "Classic Windows cleanup"),
+            system_drive.join("$Recycle.Bin"),
+            RiskClass::ReviewFirst,
+            "Deleted items retained by Windows on the drive containing the active Windows installation.",
+            "The native Windows Shell API permanently empties this drive's Recycle Bin. This cannot be undone through WinReclaim.",
+            Some(ActionKind::RecycleBin),
+        ),
+        target(
+            ("system_drive.windows_update_download", "Windows Update download cache", "System-drive cache"),
+            windows.join("SoftwareDistribution").join("Download"),
+            RiskClass::ReviewFirst,
+            "Downloaded Windows Update packages and staging data.",
+            "Inspection only. Servicing state must be managed through Windows Update or supported maintenance tools, not raw deletion.",
+            None,
+        ),
+        target(
+            ("system_drive.delivery_optimization", "Delivery Optimization cache", "System-drive cache"),
+            program_data
+                .join("Microsoft")
+                .join("Windows")
+                .join("DeliveryOptimization")
+                .join("Cache"),
+            RiskClass::ReviewFirst,
+            "Locally cached Windows delivery content used for update distribution.",
+            "Inspection only. WinReclaim does not bypass the Windows Delivery Optimization service.",
+            None,
+        ),
+        target(
+            ("system_drive.package_cache", "Installer package cache", "System-drive cache"),
+            program_data.join("Package Cache"),
+            RiskClass::Protected,
+            "Installer payloads that applications may require for repair, update or uninstall operations.",
+            "Protected. Raw deletion can break repair, update and uninstall workflows.",
+            None,
+        ),
+        target(
+            ("system_drive.wer_archive", "Windows Error Reporting archive", "System-drive cache"),
+            program_data
+                .join("Microsoft")
+                .join("Windows")
+                .join("WER")
+                .join("ReportArchive"),
+            RiskClass::ReviewFirst,
+            "Archived system-level Windows Error Reporting data.",
+            "Inspection only in this release because reports may still be needed for diagnostics.",
+            None,
+        ),
+        target(
+            ("system_drive.vendor_amd", "AMD installer files", "Driver installer cache"),
+            system_drive.join("AMD"),
+            RiskClass::ReviewFirst,
+            "Top-level AMD driver installer extraction data on the Windows drive.",
+            "Inspection only. Confirm that no driver installation or rollback depends on these files.",
+            None,
+        ),
+        target(
+            ("system_drive.vendor_nvidia", "NVIDIA installer files", "Driver installer cache"),
+            system_drive.join("NVIDIA"),
+            RiskClass::ReviewFirst,
+            "Top-level NVIDIA driver installer extraction data on the Windows drive.",
+            "Inspection only. Confirm that no driver installation or rollback depends on these files.",
+            None,
+        ),
+        target(
+            ("system_drive.vendor_intel", "Intel installer files", "Driver installer cache"),
+            system_drive.join("Intel"),
+            RiskClass::ReviewFirst,
+            "Top-level Intel driver installer extraction data on the Windows drive.",
+            "Inspection only. Confirm that no driver installation or rollback depends on these files.",
+            None,
         ),
         target(
             (

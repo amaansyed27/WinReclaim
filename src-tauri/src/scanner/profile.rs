@@ -1,9 +1,12 @@
 use super::discovery::{discover_unknown_directories, DiscoveryOptions};
-use super::sizing::{directory_size, eligible_temp_size, recognised_dump_size};
+use super::sizing::{
+    directory_size, eligible_temp_size, prefetch_size, recognised_dump_size, recycle_bin_size,
+};
+use super::system_cache::{discover_system_drive_caches, SystemCacheOptions};
 use crate::domain::{
     ActionKind, Finding, RiskClass, ScanMode, ScanProgress, ScanReport, ScanRequest,
 };
-use crate::platform::windows::{command_succeeds, disk_snapshot, user_profile};
+use crate::platform::windows::{command_succeeds, disk_snapshot, system_cache_roots, user_profile};
 use crate::rules::known_targets;
 use crate::storage::AppState;
 use anyhow::{anyhow, Result};
@@ -21,6 +24,7 @@ type ProgressCounts = (usize, usize, u64, u64);
 pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> Result<ScanReport> {
     state.cancel_scan.store(false, Ordering::Relaxed);
     let started_at = Utc::now();
+    let default_profile_scan = request.root.is_none();
     let root = request
         .root
         .clone()
@@ -32,14 +36,16 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
     }
 
     let mode = mode_limits(request.mode);
-    let targets = if request.include_known_targets {
-        known_targets()?
-            .into_iter()
-            .filter(|target| target.path.starts_with(&root))
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
+    let targets = known_targets()?
+        .into_iter()
+        .filter(|target| {
+            let profile_target = request.include_known_targets && target.path.starts_with(&root);
+            let system_target = default_profile_scan
+                && request.include_system_drive_caches
+                && target.rule_id.starts_with("system_drive.");
+            profile_target || system_target
+        })
+        .collect::<Vec<_>>();
     let known_paths = targets
         .iter()
         .map(|target| target.path.clone())
@@ -49,7 +55,10 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
     } else {
         Vec::new()
     };
-    let total_targets = targets.len() + project_roots.len() + usize::from(request.discover_unknown);
+    let total_targets = targets.len()
+        + project_roots.len()
+        + usize::from(request.discover_unknown)
+        + usize::from(default_profile_scan && request.include_system_drive_caches);
     let mut findings = Vec::new();
     let mut scanned_entries = 0_u64;
     let mut skipped_entries = 0_u64;
@@ -85,9 +94,11 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             ),
         );
         let stats = match target.rule_id {
-            "windows.user_temp" => {
+            "windows.user_temp" | "system_drive.windows_temp" => {
                 eligible_temp_size(&target.path, &state.cancel_scan, TEMP_MINIMUM_AGE)
             }
+            "system_drive.prefetch" => prefetch_size(&target.path, &state.cancel_scan),
+            "system_drive.recycle_bin" => recycle_bin_size(),
             "windows.crash_dumps" => recognised_dump_size(&target.path, &state.cancel_scan),
             _ => directory_size(&target.path, &state.cancel_scan),
         };
@@ -150,7 +161,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
                 scanned_entries,
             ),
         );
-        let mut excluded = known_paths;
+        let mut excluded = known_paths.clone();
         excluded.extend(seen_project_outputs.iter().cloned());
         let dynamic = discover_unknown_directories(
             &root,
@@ -176,6 +187,44 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         skipped_entries = skipped_entries.saturating_add(dynamic.skipped_entries);
         discovered_bytes = discovered_bytes.saturating_add(dynamic.discovered_bytes);
         findings.extend(dynamic.findings);
+    }
+
+    if default_profile_scan && request.include_system_drive_caches {
+        emit_progress(
+            app,
+            "Checking caches on the Windows drive",
+            None,
+            (
+                completed_targets,
+                total_targets,
+                discovered_bytes,
+                scanned_entries,
+            ),
+        );
+        let roots = system_cache_roots()?;
+        let system_caches = discover_system_drive_caches(
+            &roots,
+            &known_paths,
+            &state.cancel_scan,
+            SystemCacheOptions {
+                max_depth: mode.system_cache_depth,
+                max_entries: mode.system_cache_entries,
+                minimum_bytes: request
+                    .minimum_finding_bytes
+                    .clamp(32 * 1024 * 1024, 20 * 1024 * 1024 * 1024),
+                max_findings: request.max_unknown_findings.clamp(5, 30),
+            },
+        );
+        if system_caches.entry_limit_reached {
+            errors.push(format!(
+                "System-drive cache discovery reached the {:?} entry limit; use Deep or Ultra mode for broader coverage.",
+                request.mode
+            ));
+        }
+        scanned_entries = scanned_entries.saturating_add(system_caches.scanned_entries);
+        skipped_entries = skipped_entries.saturating_add(system_caches.skipped_entries);
+        discovered_bytes = discovered_bytes.saturating_add(system_caches.discovered_bytes);
+        findings.extend(system_caches.findings);
     }
 
     findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
@@ -210,6 +259,8 @@ struct ModeLimits {
     project_depth: usize,
     discovery_depth: usize,
     max_entries: u64,
+    system_cache_depth: usize,
+    system_cache_entries: u64,
 }
 
 fn mode_limits(mode: ScanMode) -> ModeLimits {
@@ -218,16 +269,22 @@ fn mode_limits(mode: ScanMode) -> ModeLimits {
             project_depth: 4,
             discovery_depth: 5,
             max_entries: 150_000,
+            system_cache_depth: 3,
+            system_cache_entries: 100_000,
         },
         ScanMode::Balanced => ModeLimits {
             project_depth: 7,
             discovery_depth: 8,
             max_entries: 600_000,
+            system_cache_depth: 5,
+            system_cache_entries: 250_000,
         },
         ScanMode::Deep => ModeLimits {
             project_depth: 10,
             discovery_depth: 14,
             max_entries: 2_000_000,
+            system_cache_depth: 7,
+            system_cache_entries: 750_000,
         },
     }
 }
@@ -355,7 +412,11 @@ fn discover_project_outputs(
 
 fn action_is_available(action: ActionKind) -> bool {
     match action {
-        ActionKind::UserTemp | ActionKind::CrashDumps => true,
+        ActionKind::UserTemp
+        | ActionKind::SystemTemp
+        | ActionKind::Prefetch
+        | ActionKind::RecycleBin
+        | ActionKind::CrashDumps => true,
         ActionKind::HuggingfacePrune => command_succeeds("hf", &["--version"]),
         ActionKind::NpmCache => command_succeeds("npm", &["--version"]),
         ActionKind::DockerPrune => {

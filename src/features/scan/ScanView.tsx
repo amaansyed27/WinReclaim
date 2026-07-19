@@ -17,7 +17,8 @@ type BooleanScanOption =
   | "includeKnownTargets"
   | "includeProjectOutputs"
   | "discoverUnknown"
-  | "includeAppData";
+  | "includeAppData"
+  | "includeSystemDriveCaches";
 
 type ScanProfile = ScanMode | "ultra";
 
@@ -27,7 +28,7 @@ const modeCopy: Record<ScanProfile, string> = {
   quick: "Known locations and a bounded discovery pass.",
   balanced: "Broader project and unclassified directory discovery.",
   deep: "Largest bounded scan for heavily nested workspaces.",
-  ultra: "Runs every scan source using Deep traversal, AppData discovery and maximum result coverage."
+  ultra: "Runs every scan source using Deep traversal, AppData and Windows-drive cache discovery, and maximum result coverage."
 };
 
 const defaultOptions: ScanOptions = {
@@ -36,6 +37,7 @@ const defaultOptions: ScanOptions = {
   includeProjectOutputs: true,
   discoverUnknown: true,
   includeAppData: true,
+  includeSystemDriveCaches: true,
   minimumFindingBytes: 256 * 1024 * 1024,
   maxUnknownFindings: 20
 };
@@ -46,6 +48,7 @@ const ultraOptions: ScanOptions = {
   includeProjectOutputs: true,
   discoverUnknown: true,
   includeAppData: true,
+  includeSystemDriveCaches: true,
   minimumFindingBytes: 64 * 1024 * 1024,
   maxUnknownFindings: 100
 };
@@ -267,6 +270,12 @@ export function ScanView({
                 disabled={scanning || !options.discoverUnknown || ultraLocked}
                 onChange={(value) => setFlag("includeAppData", value)}
               />
+              <Toggle
+                label="Check Windows-drive caches"
+                checked={options.includeSystemDriveCaches}
+                disabled={scanning || ultraLocked}
+                onChange={(value) => setFlag("includeSystemDriveCaches", value)}
+              />
             </div>
           </section>
 
@@ -276,7 +285,7 @@ export function ScanView({
               <ShieldIcon />
               <div>
                 <strong>Read-only discovery</strong>
-                <span>Dynamic findings never receive cleanup actions automatically.</span>
+                <span>Unknown system-drive caches stay inspection-only; only exact verified roots receive actions.</span>
               </div>
             </div>
             <div className="info-row">

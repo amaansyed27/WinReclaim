@@ -159,8 +159,11 @@ pub fn build_reclaim_passports(report: &ScanReport) -> Vec<ReclaimPassport> {
 pub fn recovery_class_for(finding: &Finding) -> RecoveryClass {
     match finding.action_kind {
         Some(ActionKind::UserTemp | ActionKind::CrashDumps) => RecoveryClass::Reversible,
+        Some(ActionKind::Prefetch) => RecoveryClass::Rebuildable,
         Some(ActionKind::HuggingfacePrune | ActionKind::NpmCache) => RecoveryClass::Redownloadable,
-        Some(ActionKind::DockerPrune) => RecoveryClass::Irreversible,
+        Some(ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune) => {
+            RecoveryClass::Irreversible
+        }
         None if finding.risk_class == RiskClass::Protected => RecoveryClass::Protected,
         None if finding.rule_id.starts_with("project.") => RecoveryClass::Rebuildable,
         None if finding.risk_class == RiskClass::RebuildOrRedownload => {
@@ -272,6 +275,8 @@ fn owner_for(finding: &Finding) -> String {
         "Developer editor".to_string()
     } else if rule.starts_with("project.") {
         "Local project".to_string()
+    } else if rule.starts_with("system_drive.") {
+        "Windows system drive".to_string()
     } else if rule.starts_with("windows.") {
         "Windows / installed applications".to_string()
     } else if rule.starts_with("dynamic.") {
@@ -307,7 +312,9 @@ fn recovery_method_for_redownload(finding: &Finding) -> String {
 }
 
 fn recovery_method_for_rebuild(finding: &Finding) -> String {
-    if finding.rule_id == "project.node_modules" {
+    if finding.rule_id == "system_drive.prefetch" {
+        "Windows rebuilds Prefetch traces as applications and the system launch again".to_string()
+    } else if finding.rule_id == "project.node_modules" {
         "Run the project package-manager install command using its lockfile".to_string()
     } else if finding.rule_id == "project.rust_target" {
         "Run cargo build to recreate the target directory".to_string()

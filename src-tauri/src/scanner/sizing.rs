@@ -1,4 +1,4 @@
-use crate::platform::windows::is_reparse_point;
+use crate::platform::windows::{is_reparse_point, recycle_bin_snapshot};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,6 +21,20 @@ pub fn eligible_temp_size(path: &Path, cancel: &AtomicBool, minimum_age: Duratio
 
 pub fn recognised_dump_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
     walk_size(path, cancel, None, Some(&["dmp", "mdmp", "wer"]))
+}
+
+pub fn prefetch_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
+    walk_size(path, cancel, None, Some(&["pf"]))
+}
+
+pub fn recycle_bin_size() -> SizeStats {
+    recycle_bin_snapshot()
+        .map(|(bytes, entries)| SizeStats {
+            bytes,
+            entries,
+            skipped: 0,
+        })
+        .unwrap_or_default()
 }
 
 fn walk_size(

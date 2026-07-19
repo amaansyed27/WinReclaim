@@ -23,6 +23,9 @@ pub enum Confidence {
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     UserTemp,
+    SystemTemp,
+    Prefetch,
+    RecycleBin,
     CrashDumps,
     HuggingfacePrune,
     NpmCache,
@@ -116,6 +119,8 @@ pub struct ScanRequest {
     pub discover_unknown: bool,
     #[serde(default = "default_true")]
     pub include_app_data: bool,
+    #[serde(default = "default_true")]
+    pub include_system_drive_caches: bool,
     #[serde(default = "default_minimum_finding_bytes")]
     pub minimum_finding_bytes: u64,
     #[serde(default = "default_max_unknown_findings")]
@@ -131,6 +136,7 @@ impl Default for ScanRequest {
             include_project_outputs: true,
             discover_unknown: true,
             include_app_data: true,
+            include_system_drive_caches: true,
             minimum_finding_bytes: default_minimum_finding_bytes(),
             max_unknown_findings: default_max_unknown_findings(),
         }

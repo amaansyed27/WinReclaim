@@ -1,4 +1,6 @@
-use crate::platform::windows::{canonical_is_within, is_reparse_point, local_app_data};
+use crate::platform::windows::{
+    canonical_is_within, is_reparse_point, local_app_data, windows_directory,
+};
 use crate::vault::quarantine_files;
 use anyhow::{anyhow, Result};
 use std::fs;
@@ -35,6 +37,24 @@ pub fn quarantine_user_temp(
         display_name,
         "stale temporary",
     )
+}
+
+pub fn clean_system_temp(target: &Path) -> Result<FilesystemOutcome> {
+    let allowed = windows_directory()?.join("Temp");
+    validate_exact_target(target, &allowed)?;
+    delete_tree(
+        target,
+        Some(TEMP_MINIMUM_AGE),
+        None,
+        true,
+        "stale Windows Temp",
+    )
+}
+
+pub fn clean_prefetch(target: &Path) -> Result<FilesystemOutcome> {
+    let allowed = windows_directory()?.join("Prefetch");
+    validate_exact_target(target, &allowed)?;
+    delete_tree(target, None, Some(&["pf"]), false, "Windows Prefetch .pf")
 }
 
 pub fn quarantine_crash_dumps(
@@ -129,6 +149,63 @@ fn quarantine_tree(
             format!("No eligible {noun} files were available; skipped {skipped_entries}")
         },
         vault_entry_ids,
+    })
+}
+
+fn delete_tree(
+    root: &Path,
+    minimum_age: Option<Duration>,
+    allowed_extensions: Option<&[&str]>,
+    remove_empty_directories: bool,
+    noun: &str,
+) -> Result<FilesystemOutcome> {
+    if !root.exists() {
+        return Ok(FilesystemOutcome {
+            affected_entries: 0,
+            skipped_entries: 0,
+            message: "The cleanup location no longer exists".to_string(),
+            vault_entry_ids: Vec::new(),
+        });
+    }
+
+    let (files, mut directories, discovery_skipped) =
+        collect_eligible_files(root, minimum_age, allowed_extensions);
+    let mut removed_files = 0_u64;
+    let mut skipped_entries = discovery_skipped;
+    for file in files {
+        match fs::remove_file(file) {
+            Ok(()) => removed_files = removed_files.saturating_add(1),
+            Err(_) => skipped_entries = skipped_entries.saturating_add(1),
+        }
+    }
+
+    let mut removed_directories = 0_u64;
+    if remove_empty_directories {
+        directories.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+        for directory in directories {
+            if directory != root && fs::remove_dir(&directory).is_ok() {
+                removed_directories = removed_directories.saturating_add(1);
+            }
+        }
+    }
+    let affected_entries = removed_files.saturating_add(removed_directories);
+    let message = if removed_files > 0 {
+        format!(
+            "Removed {removed_files} {noun} files; skipped {skipped_entries}. This exact-root action is not stored in the Undo Vault."
+        )
+    } else if skipped_entries > 0 {
+        format!(
+            "No eligible {noun} files were removed; skipped {skipped_entries}. Administrator rights or unlocked files may be required."
+        )
+    } else {
+        format!("No eligible {noun} files were available")
+    };
+
+    Ok(FilesystemOutcome {
+        affected_entries,
+        skipped_entries,
+        message,
+        vault_entry_ids: Vec::new(),
     })
 }
 

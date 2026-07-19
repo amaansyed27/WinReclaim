@@ -6,6 +6,9 @@ export type RiskClass =
 
 export type ActionKind =
   | "user_temp"
+  | "system_temp"
+  | "prefetch"
+  | "recycle_bin"
   | "crash_dumps"
   | "huggingface_prune"
   | "npm_cache"
@@ -26,6 +29,7 @@ export interface ScanOptions {
   includeProjectOutputs: boolean;
   discoverUnknown: boolean;
   includeAppData: boolean;
+  includeSystemDriveCaches: boolean;
   minimumFindingBytes: number;
   maxUnknownFindings: number;
 }
