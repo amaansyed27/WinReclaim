@@ -1,4 +1,5 @@
 name: Apply Classic Cleanup
+# Final strict validation after Windows-specific Clippy normalization.
 
 on:
   push:
