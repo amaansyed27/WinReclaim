@@ -5,11 +5,15 @@ import type { CleanupReceipt } from "../../types";
 interface ReceiptViewProps {
   receipt: CleanupReceipt;
   onNewScan: () => void;
+  onOpenVault: () => void;
 }
 
-export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
+export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProps) {
   const successful = receipt.results.filter((result) => result.success).length;
   const skipped = receipt.results.reduce((sum, result) => sum + result.skippedEntries, 0);
+  const reversible = receipt.results
+    .filter((result) => result.recoveryClass === "reversible")
+    .reduce((sum, result) => sum + Math.max(0, result.measuredBytesBefore - result.measuredBytesAfter), 0);
 
   async function copyJson() {
     await navigator.clipboard.writeText(JSON.stringify(receipt, null, 2));
@@ -41,8 +45,8 @@ export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
     context.fillText(`${successful} completed · ${skipped} skipped`, 76, 386);
     context.fillStyle = "#8ea4bf";
     context.font = "500 24px Segoe UI";
-    context.fillText("Protected categories untouched", 76, 438);
-    context.fillText("Local scan · reviewed plan · verified receipt", 76, 526);
+    context.fillText(`${formatBytes(reversible)} available in Undo Vault`, 76, 438);
+    context.fillText("Local scan · simulated plan · verified receipt", 76, 526);
     const link = document.createElement("a");
     link.download = `winreclaim-${receipt.id.slice(0, 8)}.png`;
     link.href = canvas.toDataURL("image/png");
@@ -68,8 +72,18 @@ export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
           <small>{successful} actions completed · {skipped} entries skipped</small>
         </section>
         <section className="surface receipt-metric"><span>Estimated</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></section>
-        <section className="surface receipt-metric"><span>Free after</span><strong>{formatBytes(receipt.diskFreeAfter)}</strong></section>
+        <section className="surface receipt-metric"><span>Undo Vault</span><strong>{formatBytes(reversible)}</strong></section>
       </div>
+
+      {receipt.vaultEntryIds.length > 0 && (
+        <button className="vault-callout" onClick={onOpenVault}>
+          <div>
+            <strong>{receipt.vaultEntryIds.length} reversible cleanup manifest{receipt.vaultEntryIds.length === 1 ? "" : "s"}</strong>
+            <span>Restore eligible files for seven days without overwriting existing paths.</span>
+          </div>
+          <span>Open Undo Vault →</span>
+        </button>
+      )}
 
       <section className="surface receipt-detail">
         <header>
@@ -84,7 +98,12 @@ export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
           {receipt.results.map((result) => (
             <div className="receipt-line" key={result.findingId}>
               <div>
-                <strong>{result.displayName}</strong>
+                <div className="receipt-result-title">
+                  <strong>{result.displayName}</strong>
+                  <i className={`recovery-badge recovery-${result.recoveryClass}`}>
+                    {result.recoveryClass.replaceAll("_", " ")}
+                  </i>
+                </div>
                 <span>{result.message}</span>
               </div>
               <span className={result.success ? "status-success" : "status-failed"}>
