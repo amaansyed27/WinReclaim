@@ -1,6 +1,7 @@
 mod actions;
 mod commands;
 mod domain;
+mod insights;
 mod intent;
 mod planner;
 mod platform;
@@ -8,6 +9,7 @@ mod receipts;
 mod rules;
 mod scanner;
 mod storage;
+mod vault;
 
 use storage::AppState;
 
@@ -29,7 +31,11 @@ pub fn run() {
             commands::interpret_cleanup_intent,
             commands::create_cleanup_plan,
             commands::execute_cleanup_plan,
-            commands::list_receipts
+            commands::list_receipts,
+            commands::get_storage_timeline,
+            commands::get_reclaim_passports,
+            commands::list_vault_entries,
+            commands::restore_vault_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running WinReclaim");
