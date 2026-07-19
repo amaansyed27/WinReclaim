@@ -1,6 +1,6 @@
 import { ArrowIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
-import type { AiStatus, Finding, RiskClass, ScanReport } from "../../types";
+import type { AiStatus, Finding, ReclaimPassport, RiskClass, ScanReport } from "../../types";
 import { FindingRow } from "./FindingRow";
 import { IntentPlanner } from "./IntentPlanner";
 
@@ -13,6 +13,7 @@ const groups: { id: RiskClass; title: string; note: string }[] = [
 
 interface FindingsViewProps {
   report: ScanReport;
+  passports: Map<string, ReclaimPassport>;
   selectedIds: Set<string>;
   aiStatus: AiStatus | null;
   intentLoading: boolean;
@@ -25,6 +26,7 @@ interface FindingsViewProps {
 
 export function FindingsView({
   report,
+  passports,
   selectedIds,
   aiStatus,
   intentLoading,
@@ -44,9 +46,9 @@ export function FindingsView({
     <section className="page findings-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Scan results</span>
+          <span className="page-kicker">Reclaim Passports</span>
           <h1>Findings</h1>
-          <p>Select only the storage you are prepared to rebuild or redownload.</p>
+          <p>Ownership, activity, recovery cost and confidence are calculated locally for every item.</p>
         </div>
         <div className="header-metrics">
           <div><span>Classified</span><strong>{formatBytes(totalBytes)}</strong></div>
@@ -85,6 +87,7 @@ export function FindingsView({
                 {items.map((finding: Finding) => (
                   <FindingRow
                     finding={finding}
+                    passport={passports.get(finding.id)}
                     key={finding.id}
                     selected={selectedIds.has(finding.id)}
                     onToggle={onToggle}
@@ -107,7 +110,7 @@ export function FindingsView({
           onClick={onCreatePlan}
           disabled={!selectedIds.size}
         >
-          Review plan <ArrowIcon />
+          Simulate plan <ArrowIcon />
         </button>
       </footer>
     </section>
