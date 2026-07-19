@@ -1,5 +1,5 @@
-import { formatBytes } from "../../lib/format";
-import type { Finding, RiskClass } from "../../types";
+import { formatBytes, formatDate } from "../../lib/format";
+import type { Finding, ReclaimPassport, RiskClass } from "../../types";
 
 const riskLabels: Record<RiskClass, string> = {
   safe_now: "Safe now",
@@ -10,11 +10,12 @@ const riskLabels: Record<RiskClass, string> = {
 
 interface FindingRowProps {
   finding: Finding;
+  passport?: ReclaimPassport;
   selected: boolean;
   onToggle: (id: string) => void;
 }
 
-export function FindingRow({ finding, selected, onToggle }: FindingRowProps) {
+export function FindingRow({ finding, passport, selected, onToggle }: FindingRowProps) {
   return (
     <article className={`finding-row risk-${finding.riskClass}`}>
       <button
@@ -36,6 +37,18 @@ export function FindingRow({ finding, selected, onToggle }: FindingRowProps) {
         <p>{finding.explanation}</p>
         <code>{finding.path}</code>
         <p className="consequence">{finding.consequence}</p>
+        {passport && (
+          <div className="passport-strip">
+            <div><span>Owner</span><strong>{passport.owner}</strong></div>
+            <div><span>Recovery</span><strong>{passport.recoveryClass.replaceAll("_", " ")}</strong></div>
+            <div><span>Confidence</span><strong>{passport.confidenceScore}%</strong></div>
+            <div>
+              <span>Last change</span>
+              <strong>{passport.lastChangedAt ? formatDate(passport.lastChangedAt) : "Unknown"}</strong>
+            </div>
+            <p>{passport.activityNote} · {passport.recoveryMethod}</p>
+          </div>
+        )}
       </div>
       <div className="finding-size">
         <strong>{formatBytes(finding.estimatedBytes)}</strong>
