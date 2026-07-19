@@ -53,11 +53,7 @@ pub fn persist_scan_snapshot(report: &ScanReport) -> Result<()> {
         used_bytes: report.disk.used_bytes,
         free_bytes: report.disk.free_bytes,
         classified_bytes,
-        findings: report
-            .findings
-            .iter()
-            .map(snapshot_finding)
-            .collect(),
+        findings: report.findings.iter().map(snapshot_finding).collect(),
     };
     let filename = format!(
         "{}-{}.json",
@@ -88,7 +84,11 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
         })
         .collect::<Vec<_>>();
 
-    let previous = records.get(records.len().saturating_sub(2));
+    let previous = if records.len() >= 2 {
+        records.get(records.len() - 2)
+    } else {
+        None
+    };
     let mut deltas = Vec::new();
     let mut reclaimable_growth_bytes = 0_u64;
 
@@ -117,7 +117,12 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
                 reclaimable_growth_bytes =
                     reclaimable_growth_bytes.saturating_add(delta_bytes.unsigned_abs());
             }
-            deltas.push(delta_from(finding, previous_bytes, delta_bytes));
+            deltas.push(delta_from(
+                finding,
+                previous_bytes,
+                finding.estimated_bytes,
+                delta_bytes,
+            ));
         }
 
         for finding in &previous.findings {
@@ -127,6 +132,7 @@ pub fn build_storage_timeline() -> Result<StorageTimeline> {
             deltas.push(delta_from(
                 finding,
                 finding.estimated_bytes,
+                0,
                 signed_delta(0, finding.estimated_bytes),
             ));
         }
@@ -180,7 +186,12 @@ fn snapshot_finding(finding: &Finding) -> SnapshotFinding {
     }
 }
 
-fn delta_from(finding: &SnapshotFinding, previous_bytes: u64, delta_bytes: i64) -> TimelineDelta {
+fn delta_from(
+    finding: &SnapshotFinding,
+    previous_bytes: u64,
+    current_bytes: u64,
+    delta_bytes: i64,
+) -> TimelineDelta {
     TimelineDelta {
         key: finding.key.clone(),
         display_name: finding.display_name.clone(),
@@ -188,7 +199,7 @@ fn delta_from(finding: &SnapshotFinding, previous_bytes: u64, delta_bytes: i64) 
         path: finding.path.clone(),
         owner: finding.owner.clone(),
         previous_bytes,
-        current_bytes: finding.estimated_bytes,
+        current_bytes,
         delta_bytes,
         confidence_score: finding.confidence_score,
         recovery_class: finding.recovery_class,
