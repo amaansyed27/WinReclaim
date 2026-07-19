@@ -71,4 +71,10 @@ replace_once(
 ''',
 )
 
-print("Classic cleanup enum and progress integration fixed")
+replace_once(
+    "src-tauri/src/platform/windows/system_storage.rs",
+    '''        let trimmed = text.trim_end_matches(|character| character == '\\' || character == '/');''',
+    '''        let trimmed = text.trim_end_matches(['\\', '/']);''',
+)
+
+print("Classic cleanup enum, progress and Clippy integration fixed")
