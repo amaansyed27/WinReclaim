@@ -72,3 +72,5 @@ body { font-size: 14px; }
   .scan-dashboard { grid-template-columns: 1fr; }
   .scan-view { min-height: auto; }
 }
+
+/* Ultra profile validation trigger */
