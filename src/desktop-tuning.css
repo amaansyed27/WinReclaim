@@ -1,0 +1,74 @@
+/* Desktop readability and scan workspace refinements */
+body { font-size: 14px; }
+
+.desktop-workspace { grid-template-columns: 212px minmax(0, 1fr); }
+.workspace-scroll { padding: 22px 26px 28px; }
+.scan-view { min-height: calc(100vh - 86px); display: flex; flex-direction: column; }
+.scan-dashboard { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 320px; align-items: stretch; }
+.scan-primary-panel { min-height: 0; display: flex; flex-direction: column; }
+.scan-primary-panel .compact-empty-state { flex: 1; min-height: 190px; }
+.scan-side-column { grid-template-rows: auto 1fr; }
+.protection-panel { min-height: 0; }
+
+.window-app-title,
+.window-app-title strong { font-size: 12px; }
+.sidebar-brand strong { font-size: 14px; }
+.sidebar-brand > div > span { font-size: 11px; }
+.sidebar-section-label { font-size: 10px; }
+.sidebar-nav-item { height: 40px; font-size: 13px; }
+.local-status strong { font-size: 11px; }
+.local-status span { font-size: 10px; }
+
+.page-header h1 { font-size: 30px; }
+.page-header p { font-size: 13.5px; }
+.page-kicker,
+.surface-label { font-size: 10px; }
+.status-chip { min-width: 76px; height: 30px; font-size: 11px; }
+.surface-title h2 { font-size: 15px; }
+.surface-title span { font-size: 11.5px; }
+.button { min-height: 36px; padding-inline: 15px; font-size: 12.5px; }
+
+.info-row strong { font-size: 12.5px; }
+.info-row div span { font-size: 11.5px; }
+.metric-row span { font-size: 10px; }
+.metric-row strong { font-size: 17px; }
+.path-line { font-size: 10.5px; }
+.empty-state strong { font-size: 15px; }
+.empty-state span { font-size: 11.5px; }
+
+.finding-group-head h2 { font-size: 14px; }
+.finding-group-head p { font-size: 11px; }
+.finding-main h3 { font-size: 13px; }
+.finding-main > p { font-size: 11.5px; }
+.finding-main code { font-size: 10.5px; }
+.finding-size strong { font-size: 14px; }
+.finding-size span { font-size: 9.5px; }
+.risk-label { font-size: 9px; }
+
+.scan-config-panel { padding: 15px; }
+.scan-config-panel > .surface-label { margin-bottom: 11px; }
+.segmented-control { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid var(--line); background: rgba(5, 15, 27, 0.7); }
+.segmented-control button { min-height: 32px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted-strong); font-size: 11.5px; cursor: pointer; }
+.segmented-control button:hover:not(:disabled) { color: var(--text); background: rgba(72, 139, 207, 0.08); }
+.segmented-control button.is-active { color: #eef8ff; border-color: rgba(96, 174, 252, 0.24); background: linear-gradient(180deg, rgba(61, 151, 240, 0.28), rgba(38, 108, 179, 0.18)); }
+.segmented-control button:disabled { opacity: .5; }
+.config-help { min-height: 32px; margin: 8px 0 13px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.config-field { display: grid; gap: 6px; margin-top: 11px; }
+.config-field > span { color: var(--muted-strong); font-size: 11px; font-weight: 600; }
+.config-field select { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 4px; outline: none; color: var(--text-soft); background: #0a192b; font-size: 12px; }
+.config-field select:focus { border-color: var(--accent); }
+.config-field select:disabled { opacity: .45; }
+.scan-toggles { margin-top: 14px; border-top: 1px solid var(--line); }
+.toggle-row { position: relative; min-height: 39px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); color: var(--text-soft); font-size: 11.5px; cursor: pointer; }
+.toggle-row input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle-row i { width: 30px; height: 17px; flex: none; position: relative; border: 1px solid rgba(144, 178, 216, .3); border-radius: 999px; background: #091522; transition: background .12s ease, border-color .12s ease; }
+.toggle-row i::after { content: ""; width: 11px; height: 11px; position: absolute; left: 2px; top: 2px; border-radius: 50%; background: #7990aa; transition: transform .12s ease, background .12s ease; }
+.toggle-row input:checked + i { border-color: rgba(85, 168, 255, .55); background: rgba(47, 143, 233, .38); }
+.toggle-row input:checked + i::after { transform: translateX(13px); background: #79c4ff; }
+.toggle-row.is-disabled { opacity: .42; cursor: default; }
+
+@media (max-width: 940px) {
+  .desktop-workspace { grid-template-columns: 184px minmax(0, 1fr); }
+  .scan-dashboard { grid-template-columns: 1fr; }
+  .scan-view { min-height: auto; }
+}
