@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Brand } from "./components/Brand";
-import { StepNav } from "./components/StepNav";
+import { Sidebar } from "./components/Sidebar";
+import { WindowTitlebar } from "./components/WindowTitlebar";
 import { FindingsView } from "./features/findings/FindingsView";
 import { PlanView } from "./features/plan/PlanView";
 import { ReceiptView } from "./features/receipt/ReceiptView";
 import { ScanView } from "./features/scan/ScanView";
-import { UpdateControl } from "./features/update/UpdateControl";
 import {
   cancelScan,
   createCleanupPlan,
@@ -24,6 +23,13 @@ import type {
 } from "./types";
 
 export type AppStep = "scan" | "findings" | "plan" | "receipt";
+
+const pageTitles: Record<AppStep, string> = {
+  scan: "Storage scan",
+  findings: "Findings",
+  plan: "Review plan",
+  receipt: "Cleanup receipt"
+};
 
 export function App() {
   const [step, setStep] = useState<AppStep>("scan");
@@ -54,8 +60,7 @@ export function App() {
         setAiStatus({
           configured: false,
           model: "gpt-5.6",
-          privacyNote:
-            "Only anonymized category, size, risk and consequence metadata is sent. Paths remain local."
+          privacyNote: "Only anonymized category, size, risk and consequence metadata is sent. Paths remain local."
         });
       });
   }, []);
@@ -69,6 +74,18 @@ export function App() {
       ),
     [report]
   );
+
+  const availableSteps = useMemo(() => {
+    const steps = new Set<AppStep>(["scan"]);
+    if (report) steps.add("findings");
+    if (plan) steps.add("plan");
+    if (receipt) steps.add("receipt");
+    return steps;
+  }, [plan, receipt, report]);
+
+  function navigate(next: AppStep) {
+    if (availableSteps.has(next)) setStep(next);
+  }
 
   async function handleStartScan() {
     setError(null);
@@ -117,7 +134,7 @@ export function App() {
       setSelectedIds(new Set(validSelection));
 
       const exclusionNote = suggestion.excludedLabels.length
-        ? ` Explicitly excluded: ${suggestion.excludedLabels.join(", ")}.`
+        ? ` Excluded: ${suggestion.excludedLabels.join(", ")}.`
         : "";
       setIntentSummary(`${suggestion.summary}${exclusionNote}`);
     } catch (intentError) {
@@ -156,64 +173,70 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <Brand />
-        <StepNav current={step} />
-        <UpdateControl />
-      </header>
+    <div className="desktop-app">
+      <WindowTitlebar pageTitle={pageTitles[step]} />
+      <div className="desktop-workspace">
+        <Sidebar
+          current={step}
+          available={availableSteps}
+          scanning={scanning}
+          onNavigate={navigate}
+        />
 
-      <main>
-        {step === "scan" && (
-          <ScanView
-            scanning={scanning}
-            progress={progress}
-            report={report}
-            error={error}
-            onStart={handleStartScan}
-            onCancel={handleCancelScan}
-            onContinue={() => setStep("findings")}
-          />
-        )}
+        <main className="workspace-main">
+          <div className="workspace-scroll">
+            {step === "scan" && (
+              <ScanView
+                scanning={scanning}
+                progress={progress}
+                report={report}
+                error={error}
+                onStart={handleStartScan}
+                onCancel={handleCancelScan}
+                onContinue={() => setStep("findings")}
+              />
+            )}
 
-        {step === "findings" && report && (
-          <FindingsView
-            report={report}
-            selectedIds={selectedIds}
-            aiStatus={aiStatus}
-            intentLoading={intentLoading}
-            intentSummary={intentSummary}
-            onInterpretIntent={handleInterpretIntent}
-            onToggle={toggleFinding}
-            onBack={() => setStep("scan")}
-            onCreatePlan={handleCreatePlan}
-          />
-        )}
+            {step === "findings" && report && (
+              <FindingsView
+                report={report}
+                selectedIds={selectedIds}
+                aiStatus={aiStatus}
+                intentLoading={intentLoading}
+                intentSummary={intentSummary}
+                onInterpretIntent={handleInterpretIntent}
+                onToggle={toggleFinding}
+                onBack={() => setStep("scan")}
+                onCreatePlan={handleCreatePlan}
+              />
+            )}
 
-        {step === "plan" && plan && (
-          <PlanView
-            plan={plan}
-            executing={executing}
-            error={error}
-            onBack={() => setStep("findings")}
-            onExecute={handleExecute}
-          />
-        )}
+            {step === "plan" && plan && (
+              <PlanView
+                plan={plan}
+                executing={executing}
+                error={error}
+                onBack={() => setStep("findings")}
+                onExecute={handleExecute}
+              />
+            )}
 
-        {step === "receipt" && receipt && (
-          <ReceiptView
-            receipt={receipt}
-            onNewScan={() => {
-              setReport(null);
-              setPlan(null);
-              setReceipt(null);
-              setIntentSummary(null);
-              setSelectedIds(new Set());
-              setStep("scan");
-            }}
-          />
-        )}
-      </main>
+            {step === "receipt" && receipt && (
+              <ReceiptView
+                receipt={receipt}
+                onNewScan={() => {
+                  setReport(null);
+                  setPlan(null);
+                  setReceipt(null);
+                  setIntentSummary(null);
+                  setSelectedIds(new Set());
+                  setStep("scan");
+                }}
+              />
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
