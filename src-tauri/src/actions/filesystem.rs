@@ -111,12 +111,18 @@ fn quarantine_tree(
         .unwrap_or_default();
     let skipped_entries = discovery_skipped.saturating_add(outcome.skipped_entries);
     let affected_entries = outcome.moved_entries.saturating_add(removed_directories);
+    let vault_description = if outcome.compressed {
+        "compressed seven-day Undo Vault"
+    } else {
+        "seven-day Undo Vault"
+    };
+
     Ok(FilesystemOutcome {
         affected_entries,
         skipped_entries,
         message: if outcome.moved_entries > 0 {
             format!(
-                "Moved {} {noun} files into the seven-day Undo Vault; skipped {skipped_entries}",
+                "Moved {} {noun} files into the {vault_description}; skipped {skipped_entries}. Actual reclaimed space is measured after compression.",
                 outcome.moved_entries
             )
         } else {
