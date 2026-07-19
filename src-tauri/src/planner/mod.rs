@@ -1,4 +1,6 @@
-use crate::domain::{CleanupPlan, CleanupPlanItem, CreatePlanRequest, ScanReport};
+use crate::domain::{
+    ActionKind, CleanupPlan, CleanupPlanItem, CreatePlanRequest, PlanSimulation, ScanReport,
+};
 use crate::rules::RULE_SET_VERSION;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -49,12 +51,16 @@ pub fn build_plan(report: &ScanReport, request: &CreatePlanRequest) -> Result<Cl
             "One or more selected findings were not present in the current scan"
         ));
     }
+
+    let estimated_reclaim_bytes = items.iter().map(|item| item.estimated_bytes).sum();
+    let simulation = build_simulation(report, &items, estimated_reclaim_bytes);
     let mut plan = CleanupPlan {
         id: Uuid::new_v4(),
         scan_id: report.scan_id,
         created_at: Utc::now(),
-        estimated_reclaim_bytes: items.iter().map(|item| item.estimated_bytes).sum(),
+        estimated_reclaim_bytes,
         items,
+        simulation,
         rule_set_version: RULE_SET_VERSION.to_string(),
         plan_hash: String::new(),
     };
@@ -64,6 +70,49 @@ pub fn build_plan(report: &ScanReport, request: &CreatePlanRequest) -> Result<Cl
 
 pub fn verify_plan_hash(plan: &CleanupPlan) -> Result<bool> {
     Ok(hash_plan(plan)? == plan.plan_hash)
+}
+
+fn build_simulation(
+    report: &ScanReport,
+    items: &[CleanupPlanItem],
+    estimated_reclaim_bytes: u64,
+) -> PlanSimulation {
+    let mut simulation = PlanSimulation {
+        current_free_bytes: report.disk.free_bytes,
+        projected_free_bytes: report.disk.free_bytes.saturating_add(estimated_reclaim_bytes),
+        estimated_reclaim_bytes,
+        affected_items: items.len(),
+        protected_items_touched: 0,
+        ..PlanSimulation::default()
+    };
+
+    for item in items {
+        match item.action_kind {
+            ActionKind::UserTemp | ActionKind::CrashDumps => {
+                simulation.reversible_bytes = simulation
+                    .reversible_bytes
+                    .saturating_add(item.estimated_bytes);
+                simulation.estimated_recovery_minutes = simulation
+                    .estimated_recovery_minutes
+                    .saturating_add(1);
+            }
+            ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
+                simulation.redownloadable_bytes = simulation
+                    .redownloadable_bytes
+                    .saturating_add(item.estimated_bytes);
+                simulation.estimated_recovery_minutes = simulation
+                    .estimated_recovery_minutes
+                    .saturating_add(8);
+            }
+            ActionKind::DockerPrune => {
+                simulation.irreversible_bytes = simulation
+                    .irreversible_bytes
+                    .saturating_add(item.estimated_bytes);
+            }
+        }
+    }
+
+    simulation
 }
 
 fn hash_plan(plan: &CleanupPlan) -> Result<String> {
@@ -116,6 +165,7 @@ mod tests {
         };
         let mut plan = build_plan(&report, &request).unwrap();
         assert!(verify_plan_hash(&plan).unwrap());
+        assert_eq!(plan.simulation.reversible_bytes, 100);
         plan.estimated_reclaim_bytes += 1;
         assert!(!verify_plan_hash(&plan).unwrap());
     }
