@@ -19,10 +19,35 @@ type BooleanScanOption =
   | "discoverUnknown"
   | "includeAppData";
 
-const modeCopy: Record<ScanMode, string> = {
+type ScanProfile = ScanMode | "ultra";
+
+const profiles: ScanProfile[] = ["quick", "balanced", "deep", "ultra"];
+
+const modeCopy: Record<ScanProfile, string> = {
   quick: "Known locations and a bounded discovery pass.",
   balanced: "Broader project and unclassified directory discovery.",
-  deep: "Largest entry budget and deepest directory traversal."
+  deep: "Largest bounded scan for heavily nested workspaces.",
+  ultra: "Runs every scan source using Deep traversal, AppData discovery and maximum result coverage."
+};
+
+const defaultOptions: ScanOptions = {
+  mode: "balanced",
+  includeKnownTargets: true,
+  includeProjectOutputs: true,
+  discoverUnknown: true,
+  includeAppData: true,
+  minimumFindingBytes: 256 * 1024 * 1024,
+  maxUnknownFindings: 20
+};
+
+const ultraOptions: ScanOptions = {
+  mode: "deep",
+  includeKnownTargets: true,
+  includeProjectOutputs: true,
+  discoverUnknown: true,
+  includeAppData: true,
+  minimumFindingBytes: 64 * 1024 * 1024,
+  maxUnknownFindings: 100
 };
 
 export function ScanView({
@@ -34,24 +59,27 @@ export function ScanView({
   onCancel,
   onContinue
 }: ScanViewProps) {
-  const [options, setOptions] = useState<ScanOptions>({
-    mode: "balanced",
-    includeKnownTargets: true,
-    includeProjectOutputs: true,
-    discoverUnknown: true,
-    includeAppData: true,
-    minimumFindingBytes: 256 * 1024 * 1024,
-    maxUnknownFindings: 20
-  });
+  const [profile, setProfile] = useState<ScanProfile>("balanced");
+  const [options, setOptions] = useState<ScanOptions>(defaultOptions);
 
   const progressValue = progress?.totalTargets
     ? Math.round((progress.completedTargets / progress.totalTargets) * 100)
     : 0;
   const unknownCount =
     report?.findings.filter((finding) => finding.ruleId === "dynamic.large_directory").length ?? 0;
+  const ultraLocked = profile === "ultra";
 
   function setFlag(key: BooleanScanOption, value: boolean) {
     setOptions((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectProfile(nextProfile: ScanProfile) {
+    setProfile(nextProfile);
+    if (nextProfile === "ultra") {
+      setOptions(ultraOptions);
+      return;
+    }
+    setOptions((current) => ({ ...current, mode: nextProfile }));
   }
 
   return (
@@ -81,12 +109,11 @@ export function ScanView({
                 </span>
               </div>
             </div>
-            {!scanning && (
+            {!scanning ? (
               <button className="button button-primary" onClick={() => onStart(options)}>
                 {report ? "Scan again" : "Start scan"}
               </button>
-            )}
-            {scanning && (
+            ) : (
               <button className="button button-secondary" onClick={onCancel}>
                 Cancel
               </button>
@@ -162,25 +189,25 @@ export function ScanView({
           <section className="surface scan-config-panel">
             <span className="surface-label">Scan profile</span>
             <div className="segmented-control" role="group" aria-label="Scan depth">
-              {(["quick", "balanced", "deep"] as ScanMode[]).map((mode) => (
+              {profiles.map((item) => (
                 <button
-                  key={mode}
+                  key={item}
                   type="button"
-                  className={options.mode === mode ? "is-active" : ""}
+                  className={profile === item ? "is-active" : ""}
                   disabled={scanning}
-                  onClick={() => setOptions((current) => ({ ...current, mode }))}
+                  onClick={() => selectProfile(item)}
                 >
-                  {mode[0].toUpperCase() + mode.slice(1)}
+                  {item[0].toUpperCase() + item.slice(1)}
                 </button>
               ))}
             </div>
-            <p className="config-help">{modeCopy[options.mode]}</p>
+            <p className="config-help">{modeCopy[profile]}</p>
 
             <label className="config-field">
               <span>Minimum finding size</span>
               <select
                 value={options.minimumFindingBytes}
-                disabled={scanning}
+                disabled={scanning || ultraLocked}
                 onChange={(event) =>
                   setOptions((current) => ({
                     ...current,
@@ -199,7 +226,7 @@ export function ScanView({
               <span>Maximum dynamic findings</span>
               <select
                 value={options.maxUnknownFindings}
-                disabled={scanning || !options.discoverUnknown}
+                disabled={scanning || !options.discoverUnknown || ultraLocked}
                 onChange={(event) =>
                   setOptions((current) => ({
                     ...current,
@@ -211,6 +238,7 @@ export function ScanView({
                 <option value={20}>20</option>
                 <option value={40}>40</option>
                 <option value={75}>75</option>
+                <option value={100}>100</option>
               </select>
             </label>
 
@@ -218,25 +246,25 @@ export function ScanView({
               <Toggle
                 label="Verified tool locations"
                 checked={options.includeKnownTargets}
-                disabled={scanning}
+                disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("includeKnownTargets", value)}
               />
               <Toggle
                 label="Project build output"
                 checked={options.includeProjectOutputs}
-                disabled={scanning}
+                disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("includeProjectOutputs", value)}
               />
               <Toggle
                 label="Discover unknown large folders"
                 checked={options.discoverUnknown}
-                disabled={scanning}
+                disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("discoverUnknown", value)}
               />
               <Toggle
                 label="Include AppData discovery"
                 checked={options.includeAppData}
-                disabled={scanning || !options.discoverUnknown}
+                disabled={scanning || !options.discoverUnknown || ultraLocked}
                 onChange={(value) => setFlag("includeAppData", value)}
               />
             </div>
