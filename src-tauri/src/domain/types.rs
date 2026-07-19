@@ -29,6 +29,17 @@ pub enum ActionKind {
     DockerPrune,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RecoveryClass {
+    Reversible,
+    Redownloadable,
+    Rebuildable,
+    #[default]
+    Irreversible,
+    Protected,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiskSnapshot {
@@ -186,6 +197,21 @@ pub struct CleanupPlanItem {
     pub action_kind: ActionKind,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanSimulation {
+    pub current_free_bytes: u64,
+    pub projected_free_bytes: u64,
+    pub estimated_reclaim_bytes: u64,
+    pub reversible_bytes: u64,
+    pub redownloadable_bytes: u64,
+    pub rebuildable_bytes: u64,
+    pub irreversible_bytes: u64,
+    pub estimated_recovery_minutes: u32,
+    pub affected_items: usize,
+    pub protected_items_touched: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CleanupPlan {
@@ -194,6 +220,8 @@ pub struct CleanupPlan {
     pub created_at: DateTime<Utc>,
     pub estimated_reclaim_bytes: u64,
     pub items: Vec<CleanupPlanItem>,
+    #[serde(default)]
+    pub simulation: PlanSimulation,
     pub rule_set_version: String,
     pub plan_hash: String,
 }
@@ -217,6 +245,10 @@ pub struct ActionResult {
     pub skipped_entries: u64,
     pub success: bool,
     pub message: String,
+    #[serde(default)]
+    pub recovery_class: RecoveryClass,
+    #[serde(default)]
+    pub vault_entry_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,6 +264,102 @@ pub struct CleanupReceipt {
     pub actual_reclaimed_bytes: u64,
     pub estimated_reclaim_bytes: u64,
     pub results: Vec<ActionResult>,
+    #[serde(default)]
+    pub vault_entry_ids: Vec<Uuid>,
     pub protected_summary: Vec<String>,
     pub rule_set_version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReclaimPassport {
+    pub finding_id: Uuid,
+    pub owner: String,
+    pub last_changed_at: Option<DateTime<Utc>>,
+    pub recovery_class: RecoveryClass,
+    pub recovery_method: String,
+    pub estimated_recovery_minutes: Option<u32>,
+    pub confidence_score: u8,
+    pub activity_note: String,
+    pub evidence: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotSummary {
+    pub id: Uuid,
+    pub scan_id: Uuid,
+    pub captured_at: DateTime<Utc>,
+    pub used_bytes: u64,
+    pub free_bytes: u64,
+    pub classified_bytes: u64,
+    pub finding_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineDelta {
+    pub key: String,
+    pub display_name: String,
+    pub category: String,
+    pub path: String,
+    pub owner: String,
+    pub previous_bytes: u64,
+    pub current_bytes: u64,
+    pub delta_bytes: i64,
+    pub confidence_score: u8,
+    pub recovery_class: RecoveryClass,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageTimeline {
+    pub snapshots: Vec<SnapshotSummary>,
+    pub deltas: Vec<TimelineDelta>,
+    pub total_growth_bytes: i64,
+    pub reclaimable_growth_bytes: u64,
+    pub baseline_available: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VaultStatus {
+    Active,
+    Restored,
+    PartiallyRestored,
+    Expired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultEntry {
+    pub id: Uuid,
+    pub receipt_id: Uuid,
+    pub finding_id: Uuid,
+    pub display_name: String,
+    pub original_root: String,
+    pub payload_root: String,
+    pub relative_paths: Vec<String>,
+    pub stored_bytes: u64,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub restored_at: Option<DateTime<Utc>>,
+    pub status: VaultStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreRequest {
+    pub vault_entry_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreResult {
+    pub vault_entry_id: Uuid,
+    pub restored_entries: u64,
+    pub skipped_entries: u64,
+    pub restored_bytes: u64,
+    pub status: VaultStatus,
+    pub message: String,
 }
