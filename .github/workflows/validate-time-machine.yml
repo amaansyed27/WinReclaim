@@ -1,0 +1,117 @@
+name: Validate Storage Time Machine
+
+on:
+  push:
+    branches: [feature/storage-time-machine]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: winreclaim-time-machine
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate frontend
+        id: frontend
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "time-machine-frontend.log"
+          npm run check 2>&1 | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build 2>&1 | Tee-Object -FilePath $log -Append
+          exit $LASTEXITCODE
+
+      - name: Normalize and validate Rust
+        id: rust
+        continue-on-error: true
+        working-directory: src-tauri
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "time-machine-rust.log"
+          cargo fmt 2>&1 | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --quiet 2>&1 | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --all-targets --quiet -- -D warnings 2>&1 | Tee-Object -FilePath $log -Append
+          exit $LASTEXITCODE
+
+      - name: Commit normalized Rust
+        if: steps.frontend.outcome == 'success' && steps.rust.outcome == 'success'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Normalize Storage Time Machine Rust source"
+            git push origin HEAD:feature/storage-time-machine
+          }
+
+      - name: Publish diagnostics
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $frontendPath = Join-Path $env:RUNNER_TEMP "time-machine-frontend.log"
+          $rustPath = Join-Path $env:RUNNER_TEMP "time-machine-rust.log"
+          $frontendLog = if (Test-Path $frontendPath) { (Get-Content $frontendPath -Tail 180) -join "`n" } else { "not run" }
+          $rustLog = if (Test-Path $rustPath) { (Get-Content $rustPath -Tail 260) -join "`n" } else { "not run" }
+          $success = "${{ steps.frontend.outcome }}" -eq "success" -and "${{ steps.rust.outcome }}" -eq "success"
+          $body = Join-Path $env:RUNNER_TEMP "time-machine-validation.md"
+          @(
+            "# Storage Time Machine validation"
+            ""
+            "Commit: $env:GITHUB_SHA"
+            "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "Frontend: ${{ steps.frontend.outcome }}"
+            "Rust: ${{ steps.rust.outcome }}"
+            "Ready: $success"
+            ""
+            "## Frontend"
+            '```text'
+            $frontendLog
+            '```'
+            ""
+            "## Rust"
+            '```text'
+            $rustLog
+            '```'
+          ) | Set-Content $body -Encoding utf8
+          $existing = gh issue list --repo $env:GITHUB_REPOSITORY --state all --search 'Storage Time Machine validation in:title' --json number --jq '.[0].number'
+          if ($existing) {
+            gh issue edit $existing --repo $env:GITHUB_REPOSITORY --body-file $body
+            if ($success) { gh issue close $existing --repo $env:GITHUB_REPOSITORY --reason completed 2>$null }
+            else { gh issue reopen $existing --repo $env:GITHUB_REPOSITORY 2>$null }
+          } else {
+            gh issue create --repo $env:GITHUB_REPOSITORY --title "Storage Time Machine validation" --body-file $body
+          }
+          if (-not $success) { throw "Storage Time Machine validation failed" }
