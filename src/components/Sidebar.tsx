@@ -41,10 +41,7 @@ export function Sidebar({ current, available, scanning, onNavigate }: SidebarPro
           <span />
           <span />
         </div>
-        <div>
-          <strong>WinReclaim</strong>
-          <span>Storage control</span>
-        </div>
+        <strong>WinReclaim</strong>
       </div>
 
       <nav className="sidebar-nav" aria-label="Application pages">
