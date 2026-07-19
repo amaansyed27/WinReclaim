@@ -11,6 +11,18 @@ export type ActionKind =
   | "npm_cache"
   | "docker_prune";
 
+export type ScanMode = "quick" | "balanced" | "deep";
+
+export interface ScanOptions {
+  mode: ScanMode;
+  includeKnownTargets: boolean;
+  includeProjectOutputs: boolean;
+  discoverUnknown: boolean;
+  includeAppData: boolean;
+  minimumFindingBytes: number;
+  maxUnknownFindings: number;
+}
+
 export interface DiskSnapshot {
   root: string;
   totalBytes: number;

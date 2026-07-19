@@ -81,10 +81,61 @@ pub struct ScanReport {
     pub errors: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ScanMode {
+    Quick,
+    #[default]
+    Balanced,
+    Deep,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanRequest {
+    #[serde(default)]
     pub root: Option<String>,
+    #[serde(default)]
+    pub mode: ScanMode,
+    #[serde(default = "default_true")]
+    pub include_known_targets: bool,
+    #[serde(default = "default_true")]
+    pub include_project_outputs: bool,
+    #[serde(default = "default_true")]
+    pub discover_unknown: bool,
+    #[serde(default = "default_true")]
+    pub include_app_data: bool,
+    #[serde(default = "default_minimum_finding_bytes")]
+    pub minimum_finding_bytes: u64,
+    #[serde(default = "default_max_unknown_findings")]
+    pub max_unknown_findings: usize,
+}
+
+impl Default for ScanRequest {
+    fn default() -> Self {
+        Self {
+            root: None,
+            mode: ScanMode::Balanced,
+            include_known_targets: true,
+            include_project_outputs: true,
+            discover_unknown: true,
+            include_app_data: true,
+            minimum_finding_bytes: default_minimum_finding_bytes(),
+            max_unknown_findings: default_max_unknown_findings(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_minimum_finding_bytes() -> u64 {
+    256 * 1024 * 1024
+}
+
+fn default_max_unknown_findings() -> usize {
+    20
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

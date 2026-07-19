@@ -5,12 +5,13 @@ import type {
   CleanupPlan,
   CleanupReceipt,
   IntentSuggestion,
+  ScanOptions,
   ScanProgress,
   ScanReport
 } from "../types";
 
-export async function startScan(): Promise<ScanReport> {
-  return invoke<ScanReport>("start_scan", { request: {} });
+export async function startScan(options: ScanOptions): Promise<ScanReport> {
+  return invoke<ScanReport>("start_scan", { request: options });
 }
 
 export async function cancelScan(): Promise<void> {

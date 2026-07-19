@@ -1,5 +1,8 @@
+use super::discovery::{discover_unknown_directories, DiscoveryOptions};
 use super::sizing::{directory_size, eligible_temp_size, recognised_dump_size};
-use crate::domain::{ActionKind, Finding, RiskClass, ScanProgress, ScanReport, ScanRequest};
+use crate::domain::{
+    ActionKind, Finding, RiskClass, ScanMode, ScanProgress, ScanReport, ScanRequest,
+};
 use crate::platform::windows::{command_succeeds, disk_snapshot, user_profile};
 use crate::rules::known_targets;
 use crate::storage::AppState;
@@ -13,20 +16,40 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 const TEMP_MINIMUM_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
-const PROJECT_SCAN_DEPTH: usize = 7;
+type ProgressCounts = (usize, usize, u64, u64);
 
 pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> Result<ScanReport> {
     state.cancel_scan.store(false, Ordering::Relaxed);
     let started_at = Utc::now();
-    let root = request.root.map(PathBuf::from).unwrap_or(user_profile()?);
+    let root = request
+        .root
+        .clone()
+        .map(PathBuf::from)
+        .unwrap_or(user_profile()?);
 
     if !root.exists() || !root.is_dir() {
         return Err(anyhow!("Scan root is not an accessible directory"));
     }
 
-    let targets = known_targets()?;
-    let project_roots = project_roots(&root);
-    let total_targets = targets.len() + project_roots.len();
+    let mode = mode_limits(request.mode);
+    let targets = if request.include_known_targets {
+        known_targets()?
+            .into_iter()
+            .filter(|target| target.path.starts_with(&root))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let known_paths = targets
+        .iter()
+        .map(|target| target.path.clone())
+        .collect::<Vec<_>>();
+    let project_roots = if request.include_project_outputs {
+        project_roots(&root)
+    } else {
+        Vec::new()
+    };
+    let total_targets = targets.len() + project_roots.len() + usize::from(request.discover_unknown);
     let mut findings = Vec::new();
     let mut scanned_entries = 0_u64;
     let mut skipped_entries = 0_u64;
@@ -36,29 +59,31 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
 
     emit_progress(
         app,
-        "Inspecting known developer and AI storage",
+        "Inspecting verified storage locations",
         Some(&root),
-        completed_targets,
-        total_targets,
-        discovered_bytes,
-        scanned_entries,
+        (
+            completed_targets,
+            total_targets,
+            discovered_bytes,
+            scanned_entries,
+        ),
     );
 
     for target in targets {
         if state.cancel_scan.load(Ordering::Relaxed) {
             return Err(anyhow!("Scan cancelled"));
         }
-
         emit_progress(
             app,
-            "Inspecting known developer and AI storage",
+            "Inspecting verified storage locations",
             Some(&target.path),
-            completed_targets,
-            total_targets,
-            discovered_bytes,
-            scanned_entries,
+            (
+                completed_targets,
+                total_targets,
+                discovered_bytes,
+                scanned_entries,
+            ),
         );
-
         let stats = match target.rule_id {
             "windows.user_temp" => {
                 eligible_temp_size(&target.path, &state.cancel_scan, TEMP_MINIMUM_AGE)
@@ -66,12 +91,10 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             "windows.crash_dumps" => recognised_dump_size(&target.path, &state.cancel_scan),
             _ => directory_size(&target.path, &state.cancel_scan),
         };
-
         scanned_entries = scanned_entries.saturating_add(stats.entries);
         skipped_entries = skipped_entries.saturating_add(stats.skipped);
         discovered_bytes = discovered_bytes.saturating_add(stats.bytes);
         completed_targets += 1;
-
         if stats.bytes > 0 {
             let mut finding = target.into_finding(stats.bytes);
             if let Some(action) = finding.action_kind {
@@ -86,19 +109,24 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         if state.cancel_scan.load(Ordering::Relaxed) {
             return Err(anyhow!("Scan cancelled"));
         }
-
         emit_progress(
             app,
-            "Looking for rebuildable project output",
+            "Discovering project output",
             Some(&project_root),
-            completed_targets,
-            total_targets,
-            discovered_bytes,
-            scanned_entries,
+            (
+                completed_targets,
+                total_targets,
+                discovered_bytes,
+                scanned_entries,
+            ),
         );
-
-        match discover_project_outputs(&project_root, &state.cancel_scan, &mut seen_project_outputs)
-        {
+        match discover_project_outputs(
+            &project_root,
+            &state.cancel_scan,
+            &mut seen_project_outputs,
+            mode.project_depth,
+            request.minimum_finding_bytes.max(64 * 1024 * 1024),
+        ) {
             Ok((mut output_findings, entries, skipped, bytes)) => {
                 findings.append(&mut output_findings);
                 scanned_entries = scanned_entries.saturating_add(entries);
@@ -108,6 +136,46 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             Err(error) => errors.push(format!("{}: {error}", project_root.display())),
         }
         completed_targets += 1;
+    }
+
+    if request.discover_unknown {
+        emit_progress(
+            app,
+            "Discovering unclassified large directories",
+            Some(&root),
+            (
+                completed_targets,
+                total_targets,
+                discovered_bytes,
+                scanned_entries,
+            ),
+        );
+        let mut excluded = known_paths;
+        excluded.extend(seen_project_outputs.iter().cloned());
+        let dynamic = discover_unknown_directories(
+            &root,
+            &excluded,
+            &state.cancel_scan,
+            DiscoveryOptions {
+                max_depth: mode.discovery_depth,
+                max_entries: mode.max_entries,
+                minimum_bytes: request
+                    .minimum_finding_bytes
+                    .clamp(32 * 1024 * 1024, 20 * 1024 * 1024 * 1024),
+                max_findings: request.max_unknown_findings.clamp(5, 100),
+                include_app_data: request.include_app_data,
+            },
+        );
+        if dynamic.entry_limit_reached {
+            errors.push(format!(
+                "Dynamic discovery reached the {:?} scan entry limit; use Deep mode for broader coverage.",
+                request.mode
+            ));
+        }
+        scanned_entries = scanned_entries.saturating_add(dynamic.scanned_entries);
+        skipped_entries = skipped_entries.saturating_add(dynamic.skipped_entries);
+        discovered_bytes = discovered_bytes.saturating_add(dynamic.discovered_bytes);
+        findings.extend(dynamic.findings);
     }
 
     findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
@@ -127,13 +195,41 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         app,
         "Scan complete",
         None,
-        total_targets,
-        total_targets,
-        discovered_bytes,
-        scanned_entries,
+        (
+            total_targets,
+            total_targets,
+            discovered_bytes,
+            scanned_entries,
+        ),
     );
-
     Ok(report)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ModeLimits {
+    project_depth: usize,
+    discovery_depth: usize,
+    max_entries: u64,
+}
+
+fn mode_limits(mode: ScanMode) -> ModeLimits {
+    match mode {
+        ScanMode::Quick => ModeLimits {
+            project_depth: 4,
+            discovery_depth: 5,
+            max_entries: 150_000,
+        },
+        ScanMode::Balanced => ModeLimits {
+            project_depth: 7,
+            discovery_depth: 8,
+            max_entries: 600_000,
+        },
+        ScanMode::Deep => ModeLimits {
+            project_depth: 10,
+            discovery_depth: 14,
+            max_entries: 2_000_000,
+        },
+    }
 }
 
 fn project_roots(user: &Path) -> Vec<PathBuf> {
@@ -145,6 +241,8 @@ fn project_roots(user: &Path) -> Vec<PathBuf> {
         "Source",
         "source",
         "dev",
+        "repos",
+        "workspace",
     ]
     .into_iter()
     .map(|name| user.join(name))
@@ -156,13 +254,15 @@ fn discover_project_outputs(
     root: &Path,
     cancel: &std::sync::atomic::AtomicBool,
     seen: &mut HashSet<PathBuf>,
+    max_depth: usize,
+    minimum_bytes: u64,
 ) -> Result<(Vec<Finding>, u64, u64, u64)> {
     let mut findings = Vec::new();
     let mut entries = 0_u64;
     let mut skipped = 0_u64;
     let mut bytes = 0_u64;
     let mut walker = walkdir::WalkDir::new(root)
-        .max_depth(PROJECT_SCAN_DEPTH)
+        .max_depth(max_depth)
         .follow_links(false)
         .into_iter();
 
@@ -170,7 +270,6 @@ fn discover_project_outputs(
         if cancel.load(Ordering::Relaxed) {
             break;
         }
-
         let entry = match entry {
             Ok(entry) => entry,
             Err(_) => {
@@ -179,7 +278,6 @@ fn discover_project_outputs(
             }
         };
         entries += 1;
-
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
         if matches!(name.as_str(), ".git" | ".hg" | ".svn" | "$recycle.bin") {
             if entry.file_type().is_dir() {
@@ -210,7 +308,7 @@ fn discover_project_outputs(
                 "Python project environment",
                 "The environment must be recreated and dependencies reinstalled.",
             )),
-            "dist" | "build" => Some((
+            "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" => Some((
                 "project.build_output",
                 "Project build output",
                 "Generated project output",
@@ -218,11 +316,9 @@ fn discover_project_outputs(
             )),
             _ => None,
         };
-
         let Some((rule_id, display_name, category, consequence)) = descriptor else {
             continue;
         };
-
         walker.skip_current_dir();
         let canonical = entry
             .path()
@@ -231,12 +327,10 @@ fn discover_project_outputs(
         if !seen.insert(canonical) {
             continue;
         }
-
         let stats = directory_size(entry.path(), cancel);
-        if stats.bytes < 64 * 1024 * 1024 {
+        if stats.bytes < minimum_bytes {
             continue;
         }
-
         bytes = bytes.saturating_add(stats.bytes);
         entries = entries.saturating_add(stats.entries);
         skipped = skipped.saturating_add(stats.skipped);
@@ -256,7 +350,6 @@ fn discover_project_outputs(
             selected_by_default: false,
         });
     }
-
     Ok((findings, entries, skipped, bytes))
 }
 
@@ -275,11 +368,9 @@ fn emit_progress(
     app: &AppHandle,
     phase: &str,
     current_path: Option<&Path>,
-    completed_targets: usize,
-    total_targets: usize,
-    discovered_bytes: u64,
-    scanned_entries: u64,
+    counts: ProgressCounts,
 ) {
+    let (completed_targets, total_targets, discovered_bytes, scanned_entries) = counts;
     let _ = app.emit(
         "scan-progress",
         ScanProgress {
