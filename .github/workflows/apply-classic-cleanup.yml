@@ -1,5 +1,5 @@
 name: Apply Classic Cleanup
-# Final strict validation after Windows-specific Clippy normalization.
+# Corrected raw-string integration; only the newest run remains active.
 
 on:
   push:
