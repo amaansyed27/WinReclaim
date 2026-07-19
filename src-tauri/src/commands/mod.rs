@@ -1,7 +1,11 @@
 use crate::actions::execute_item;
 use crate::domain::{
     AiStatus, CleanupPlan, CleanupReceipt, CreatePlanRequest, ExecutePlanRequest, IntentRequest,
-    IntentSuggestion, ScanReport, ScanRequest,
+    IntentSuggestion, ReclaimPassport, RestoreRequest, RestoreResult, ScanReport, ScanRequest,
+    StorageTimeline, VaultEntry,
+};
+use crate::insights::{
+    build_reclaim_passports, build_storage_timeline, persist_scan_snapshot,
 };
 use crate::intent::{ai_status, interpret_intent};
 use crate::planner::{build_plan, verify_plan_hash};
@@ -9,6 +13,7 @@ use crate::platform::windows::disk_snapshot;
 use crate::receipts::persist_receipt;
 use crate::scanner::scan_profile;
 use crate::storage::AppState;
+use crate::vault::{list_entries, restore_entry};
 use chrono::Utc;
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -24,11 +29,17 @@ pub async fn start_scan(
     let app_state = state.inner().clone();
     let scan_state = app_state.clone();
 
-    let result =
+    let mut result =
         tauri::async_runtime::spawn_blocking(move || scan_profile(&app, &scan_state, request))
             .await
             .map_err(|error| format!("Scan task failed: {error}"))?
             .map_err(|error| error.to_string())?;
+
+    if let Err(error) = persist_scan_snapshot(&result) {
+        result
+            .errors
+            .push(format!("Storage timeline snapshot could not be saved: {error}"));
+    }
 
     *app_state
         .latest_scan
@@ -120,15 +131,24 @@ pub async fn execute_cleanup_plan(
     }
 
     let receipt = tauri::async_runtime::spawn_blocking(move || {
+        let receipt_id = Uuid::new_v4();
         let started_at = Utc::now();
         let disk_before =
             disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
-        let results = plan.items.iter().map(execute_item).collect::<Vec<_>>();
+        let results = plan
+            .items
+            .iter()
+            .map(|item| execute_item(item, receipt_id))
+            .collect::<Vec<_>>();
         let disk_after =
             disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
+        let vault_entry_ids = results
+            .iter()
+            .flat_map(|result| result.vault_entry_ids.iter().copied())
+            .collect::<Vec<_>>();
 
         let receipt = CleanupReceipt {
-            id: Uuid::new_v4(),
+            id: receipt_id,
             plan_id: plan.id,
             plan_hash: plan.plan_hash.clone(),
             started_at,
@@ -138,6 +158,7 @@ pub async fn execute_cleanup_plan(
             actual_reclaimed_bytes: disk_after.free_bytes.saturating_sub(disk_before.free_bytes),
             estimated_reclaim_bytes: plan.estimated_reclaim_bytes,
             results,
+            vault_entry_ids,
             protected_summary: vec![
                 "Prefetch".into(),
                 "Browser profiles".into(),
@@ -174,4 +195,36 @@ pub fn list_receipts(state: State<'_, AppState>) -> Result<Vec<CleanupReceipt>, 
         .lock()
         .map_err(|_| "Receipt storage is unavailable".to_string())?
         .clone())
+}
+
+#[tauri::command]
+pub fn get_storage_timeline() -> Result<StorageTimeline, String> {
+    build_storage_timeline().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_reclaim_passports(
+    state: State<'_, AppState>,
+    scan_id: Uuid,
+) -> Result<Vec<ReclaimPassport>, String> {
+    let report = state
+        .latest_scan
+        .lock()
+        .map_err(|_| "Scan state is unavailable".to_string())?
+        .clone()
+        .ok_or_else(|| "Run a scan before requesting reclaim passports".to_string())?;
+    if report.scan_id != scan_id {
+        return Err("The requested passport scan is no longer current".to_string());
+    }
+    Ok(build_reclaim_passports(&report))
+}
+
+#[tauri::command]
+pub fn list_vault_entries() -> Result<Vec<VaultEntry>, String> {
+    list_entries().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn restore_vault_entry(request: RestoreRequest) -> Result<RestoreResult, String> {
+    restore_entry(request.vault_entry_id).map_err(|error| error.to_string())
 }
