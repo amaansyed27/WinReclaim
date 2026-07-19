@@ -21,22 +21,28 @@ export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
     canvas.height = 630;
     const context = canvas.getContext("2d");
     if (!context) return;
-    context.fillStyle = "#f3efe4";
+    context.fillStyle = "#07111f";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = "#18201b";
-    context.font = "700 40px system-ui";
+    const gradient = context.createRadialGradient(1020, 0, 40, 1020, 0, 520);
+    gradient.addColorStop(0, "rgba(62, 143, 255, 0.38)");
+    gradient.addColorStop(1, "rgba(7, 17, 31, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#eaf3ff";
+    context.font = "650 38px Segoe UI";
     context.fillText("WinReclaim", 72, 90);
-    context.font = "700 92px system-ui";
-    context.fillText(formatBytes(receipt.actualReclaimedBytes), 72, 242);
-    context.font = "500 34px system-ui";
-    context.fillText("reclaimed from this Windows profile", 76, 292);
-    context.fillStyle = "#2f6f4e";
-    context.font = "600 28px system-ui";
-    context.fillText(`${successful} actions completed · ${skipped} locked entries skipped`, 76, 388);
-    context.fillStyle = "#4d554e";
-    context.font = "500 25px system-ui";
-    context.fillText("0 protected categories touched", 76, 440);
-    context.fillText("Local scan · deterministic cleanup · verified receipt", 76, 528);
+    context.font = "700 88px Segoe UI";
+    context.fillText(formatBytes(receipt.actualReclaimedBytes), 72, 238);
+    context.fillStyle = "#8ea4bf";
+    context.font = "500 32px Segoe UI";
+    context.fillText("reclaimed from this Windows profile", 76, 288);
+    context.fillStyle = "#65b4ff";
+    context.font = "600 26px Segoe UI";
+    context.fillText(`${successful} completed · ${skipped} skipped`, 76, 386);
+    context.fillStyle = "#8ea4bf";
+    context.font = "500 24px Segoe UI";
+    context.fillText("Protected categories untouched", 76, 438);
+    context.fillText("Local scan · reviewed plan · verified receipt", 76, 526);
     const link = document.createElement("a");
     link.download = `winreclaim-${receipt.id.slice(0, 8)}.png`;
     link.href = canvas.toDataURL("image/png");
@@ -44,43 +50,64 @@ export function ReceiptView({ receipt, onNewScan }: ReceiptViewProps) {
   }
 
   return (
-    <section className="view receipt-view">
-      <div className="receipt-hero">
-        <div className="receipt-icon-wrap"><ReceiptIcon /></div>
-        <p className="eyebrow">Cleanup receipt</p>
-        <h1>{formatBytes(receipt.actualReclaimedBytes)} reclaimed.</h1>
-        <p>{successful} actions completed. {skipped} locked or active entries skipped. The result was measured against actual free space.</p>
+    <section className="page receipt-view">
+      <header className="page-header">
+        <div>
+          <span className="page-kicker">Completed</span>
+          <h1>Cleanup receipt</h1>
+          <p>{formatDate(receipt.completedAt)}</p>
+        </div>
+        <span className="status-chip is-ready">Verified</span>
+      </header>
+
+      <div className="receipt-summary-grid">
+        <section className="surface receipt-primary-summary">
+          <span className="receipt-summary-icon"><ReceiptIcon /></span>
+          <span>Measured reclaim</span>
+          <strong>{formatBytes(receipt.actualReclaimedBytes)}</strong>
+          <small>{successful} actions completed · {skipped} entries skipped</small>
+        </section>
+        <section className="surface receipt-metric"><span>Estimated</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></section>
+        <section className="surface receipt-metric"><span>Free after</span><strong>{formatBytes(receipt.diskFreeAfter)}</strong></section>
       </div>
 
-      <div className="receipt-paper">
+      <section className="surface receipt-detail">
         <header>
-          <div><strong>WinReclaim receipt</strong><span>{formatDate(receipt.completedAt)}</span></div>
+          <div>
+            <strong>Execution results</strong>
+            <span>Receipt {receipt.id.slice(0, 8)}</span>
+          </div>
           <code>{receipt.planHash.slice(0, 20)}…</code>
         </header>
-        <div className="receipt-totals">
-          <div><span>Estimated</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></div>
-          <div><span>Measured</span><strong>{formatBytes(receipt.actualReclaimedBytes)}</strong></div>
-          <div><span>Free after</span><strong>{formatBytes(receipt.diskFreeAfter)}</strong></div>
-        </div>
+
         <div className="receipt-lines">
           {receipt.results.map((result) => (
             <div className="receipt-line" key={result.findingId}>
-              <div><strong>{result.displayName}</strong><span>{result.message}</span></div>
-              <span className={result.success ? "status-success" : "status-failed"}>{result.success ? "Completed" : "Failed"}</span>
+              <div>
+                <strong>{result.displayName}</strong>
+                <span>{result.message}</span>
+              </div>
+              <span className={result.success ? "status-success" : "status-failed"}>
+                {result.success ? "Completed" : "Failed"}
+              </span>
             </div>
           ))}
         </div>
+
         <div className="receipt-protected">
           <ShieldIcon />
-          <div><strong>Protected categories untouched</strong><p>{receipt.protectedSummary.join(" · ")}</p></div>
+          <div>
+            <strong>Protected categories untouched</strong>
+            <p>{receipt.protectedSummary.join(" · ")}</p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="receipt-actions">
-        <button className="button button-primary" onClick={downloadShareCard}>Export share card</button>
-        <button className="button button-secondary" onClick={copyJson}>Copy JSON receipt</button>
-        <button className="button button-quiet" onClick={onNewScan}>Start a new scan</button>
-      </div>
+      <footer className="page-action-row">
+        <button className="button button-primary" onClick={downloadShareCard}>Export card</button>
+        <button className="button button-secondary" onClick={copyJson}>Copy JSON</button>
+        <button className="button button-quiet" onClick={onNewScan}>New scan</button>
+      </footer>
     </section>
   );
 }
