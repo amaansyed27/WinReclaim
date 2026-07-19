@@ -18,6 +18,7 @@ import type {
   AiStatus,
   CleanupPlan,
   CleanupReceipt,
+  ScanOptions,
   ScanProgress,
   ScanReport
 } from "./types";
@@ -87,7 +88,7 @@ export function App() {
     if (availableSteps.has(next)) setStep(next);
   }
 
-  async function handleStartScan() {
+  async function handleStartScan(options: ScanOptions) {
     setError(null);
     setScanning(true);
     setProgress(null);
@@ -98,7 +99,7 @@ export function App() {
     setStep("scan");
 
     try {
-      const nextReport = await startScan();
+      const nextReport = await startScan(options);
       setReport(nextReport);
     } catch (scanError) {
       setError(String(scanError));
