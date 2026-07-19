@@ -49,8 +49,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
     } else {
         Vec::new()
     };
-    let total_targets =
-        targets.len() + project_roots.len() + usize::from(request.discover_unknown);
+    let total_targets = targets.len() + project_roots.len() + usize::from(request.discover_unknown);
     let mut findings = Vec::new();
     let mut scanned_entries = 0_u64;
     let mut skipped_entries = 0_u64;

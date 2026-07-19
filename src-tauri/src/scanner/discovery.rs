@@ -156,12 +156,7 @@ pub fn discover_unknown_directories(
     result
 }
 
-fn should_skip_directory(
-    root: &Path,
-    path: &Path,
-    name: &str,
-    options: DiscoveryOptions,
-) -> bool {
+fn should_skip_directory(root: &Path, path: &Path, name: &str, options: DiscoveryOptions) -> bool {
     if matches!(
         name,
         ".git"
@@ -195,7 +190,12 @@ fn minimum_candidate_depth(root: &Path, path: &Path) -> usize {
     let relative = path.strip_prefix(root).ok();
     if relative
         .and_then(|value| value.components().next())
-        .map(|component| component.as_os_str().to_string_lossy().eq_ignore_ascii_case("AppData"))
+        .map(|component| {
+            component
+                .as_os_str()
+                .to_string_lossy()
+                .eq_ignore_ascii_case("AppData")
+        })
         .unwrap_or(false)
     {
         3
