@@ -5,26 +5,10 @@ import { FindingRow } from "./FindingRow";
 import { IntentPlanner } from "./IntentPlanner";
 
 const groups: { id: RiskClass; title: string; note: string }[] = [
-  {
-    id: "safe_now",
-    title: "Safe now",
-    note: "Regenerable or disposable data with narrow cleanup rules."
-  },
-  {
-    id: "rebuild_or_redownload",
-    title: "Rebuild or redownload later",
-    note: "Useful space, but the tool may need to fetch or rebuild it again."
-  },
-  {
-    id: "review_first",
-    title: "Review first",
-    note: "Potentially important environments, containers or project output."
-  },
-  {
-    id: "protected",
-    title: "Protected",
-    note: "WinReclaim will not include these in an automatic cleanup plan."
-  }
+  { id: "safe_now", title: "Safe now", note: "Disposable data with narrow cleanup rules." },
+  { id: "rebuild_or_redownload", title: "Rebuild later", note: "The owning tool may fetch or rebuild this data." },
+  { id: "review_first", title: "Review first", note: "Environments, containers or project output." },
+  { id: "protected", title: "Protected", note: "Inspection only. Automatic cleanup is disabled." }
 ];
 
 interface FindingsViewProps {
@@ -53,22 +37,20 @@ export function FindingsView({
   const selectedBytes = report.findings
     .filter((finding) => selectedIds.has(finding.id))
     .reduce((total, finding) => total + finding.estimatedBytes, 0);
+  const totalBytes = report.findings.reduce((sum, item) => sum + item.estimatedBytes, 0);
+  const actionable = report.findings.filter((finding) => finding.actionAvailable).length;
 
   return (
-    <section className="view findings-view">
-      <header className="view-header">
+    <section className="page findings-view">
+      <header className="page-header">
         <div>
-          <p className="eyebrow">Storage story</p>
-          <h1>Not all large folders mean the same thing.</h1>
-          <p>Findings are grouped by consequence. Nothing is selected automatically.</p>
+          <span className="page-kicker">Scan results</span>
+          <h1>Findings</h1>
+          <p>Select only the storage you are prepared to rebuild or redownload.</p>
         </div>
-        <div className="view-stat">
-          <strong>
-            {formatBytes(
-              report.findings.reduce((sum, item) => sum + item.estimatedBytes, 0)
-            )}
-          </strong>
-          <span>classified storage</span>
+        <div className="header-metrics">
+          <div><span>Classified</span><strong>{formatBytes(totalBytes)}</strong></div>
+          <div><span>Actionable</span><strong>{actionable}</strong></div>
         </div>
       </header>
 
@@ -88,17 +70,16 @@ export function FindingsView({
           if (!items.length) return null;
 
           return (
-            <section className="finding-group" key={group.id}>
+            <section className={`finding-group group-${group.id}`} key={group.id}>
               <div className="finding-group-head">
                 <div>
                   <h2>{group.title}</h2>
                   <p>{group.note}</p>
                 </div>
-                <strong>
-                  {formatBytes(
-                    items.reduce((sum, item) => sum + item.estimatedBytes, 0)
-                  )}
-                </strong>
+                <div className="group-summary">
+                  <span>{items.length} items</span>
+                  <strong>{formatBytes(items.reduce((sum, item) => sum + item.estimatedBytes, 0))}</strong>
+                </div>
               </div>
               <div className="finding-list">
                 {items.map((finding: Finding) => (
@@ -116,19 +97,17 @@ export function FindingsView({
       </div>
 
       <footer className="sticky-action-bar">
-        <button className="button button-quiet" onClick={onBack}>
-          Back
-        </button>
-        <div>
+        <button className="button button-secondary" onClick={onBack}>Back to scan</button>
+        <div className="selection-summary">
           <span>{selectedIds.size} selected</span>
-          <strong>{formatBytes(selectedBytes)} estimated</strong>
+          <strong>{formatBytes(selectedBytes)}</strong>
         </div>
         <button
           className="button button-primary"
           onClick={onCreatePlan}
           disabled={!selectedIds.size}
         >
-          Build cleanup plan <ArrowIcon />
+          Review plan <ArrowIcon />
         </button>
       </footer>
     </section>
