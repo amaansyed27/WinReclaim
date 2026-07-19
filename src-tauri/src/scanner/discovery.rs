@@ -171,6 +171,11 @@ fn should_skip_directory(root: &Path, path: &Path, name: &str, options: Discover
         return true;
     }
 
+    let winreclaim_data = root.join("AppData").join("Local").join("WinReclaim");
+    if path == winreclaim_data {
+        return true;
+    }
+
     !options.include_app_data && path == root.join("AppData")
 }
 
@@ -259,5 +264,19 @@ mod tests {
         assert_eq!(result.findings[0].risk_class, RiskClass::ReviewFirst);
         assert!(!result.findings[0].action_available);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn skips_winreclaim_internal_app_data() {
+        let root = PathBuf::from("C:\\Users\\Amaan");
+        let internal = root.join("AppData").join("Local").join("WinReclaim");
+        let options = DiscoveryOptions {
+            max_depth: 6,
+            max_entries: 1_000,
+            minimum_bytes: 64,
+            max_findings: 10,
+            include_app_data: true,
+        };
+        assert!(should_skip_directory(&root, &internal, "winreclaim", options));
     }
 }
