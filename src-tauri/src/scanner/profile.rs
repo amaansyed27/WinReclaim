@@ -177,7 +177,6 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         skipped_entries = skipped_entries.saturating_add(dynamic.skipped_entries);
         discovered_bytes = discovered_bytes.saturating_add(dynamic.discovered_bytes);
         findings.extend(dynamic.findings);
-        completed_targets += 1;
     }
 
     findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
