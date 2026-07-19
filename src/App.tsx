@@ -5,31 +5,43 @@ import { FindingsView } from "./features/findings/FindingsView";
 import { PlanView } from "./features/plan/PlanView";
 import { ReceiptView } from "./features/receipt/ReceiptView";
 import { ScanView } from "./features/scan/ScanView";
+import { TimelineView } from "./features/timeline/TimelineView";
+import { VaultView } from "./features/vault/VaultView";
 import {
   cancelScan,
   createCleanupPlan,
   executeCleanupPlan,
   getAiStatus,
+  getReclaimPassports,
+  getStorageTimeline,
   interpretCleanupIntent,
+  listVaultEntries,
   onScanProgress,
+  restoreVaultEntry,
   startScan
 } from "./lib/tauri";
 import type {
   AiStatus,
   CleanupPlan,
   CleanupReceipt,
+  ReclaimPassport,
+  RestoreResult,
   ScanOptions,
   ScanProgress,
-  ScanReport
+  ScanReport,
+  StorageTimeline,
+  VaultEntry
 } from "./types";
 
-export type AppStep = "scan" | "findings" | "plan" | "receipt";
+export type AppStep = "scan" | "timeline" | "findings" | "plan" | "receipt" | "vault";
 
 const pageTitles: Record<AppStep, string> = {
   scan: "Storage scan",
-  findings: "Findings",
-  plan: "Review plan",
-  receipt: "Cleanup receipt"
+  timeline: "Storage Time Machine",
+  findings: "Reclaim Passports",
+  plan: "Reclaim Simulation",
+  receipt: "Cleanup receipt",
+  vault: "Undo Vault"
 };
 
 export function App() {
@@ -37,6 +49,9 @@ export function App() {
   const [scanning, setScanning] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [intentLoading, setIntentLoading] = useState(false);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [report, setReport] = useState<ScanReport | null>(null);
   const [plan, setPlan] = useState<CleanupPlan | null>(null);
@@ -44,6 +59,10 @@ export function App() {
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [intentSummary, setIntentSummary] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [passports, setPassports] = useState<Map<string, ReclaimPassport>>(new Map());
+  const [timeline, setTimeline] = useState<StorageTimeline | null>(null);
+  const [vaultEntries, setVaultEntries] = useState<VaultEntry[]>([]);
+  const [lastRestore, setLastRestore] = useState<RestoreResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,6 +83,8 @@ export function App() {
           privacyNote: "Only anonymized category, size, risk and consequence metadata is sent. Paths remain local."
         });
       });
+    void refreshTimeline();
+    void refreshVault();
   }, []);
 
   const actionFindingIds = useMemo(
@@ -77,7 +98,7 @@ export function App() {
   );
 
   const availableSteps = useMemo(() => {
-    const steps = new Set<AppStep>(["scan"]);
+    const steps = new Set<AppStep>(["scan", "timeline", "vault"]);
     if (report) steps.add("findings");
     if (plan) steps.add("plan");
     if (receipt) steps.add("receipt");
@@ -85,7 +106,32 @@ export function App() {
   }, [plan, receipt, report]);
 
   function navigate(next: AppStep) {
-    if (availableSteps.has(next)) setStep(next);
+    if (!availableSteps.has(next)) return;
+    setStep(next);
+    if (next === "timeline") void refreshTimeline();
+    if (next === "vault") void refreshVault();
+  }
+
+  async function refreshTimeline() {
+    setTimelineLoading(true);
+    try {
+      setTimeline(await getStorageTimeline());
+    } catch (timelineError) {
+      setError(String(timelineError));
+    } finally {
+      setTimelineLoading(false);
+    }
+  }
+
+  async function refreshVault() {
+    setVaultLoading(true);
+    try {
+      setVaultEntries(await listVaultEntries());
+    } catch (vaultError) {
+      setError(String(vaultError));
+    } finally {
+      setVaultLoading(false);
+    }
   }
 
   async function handleStartScan(options: ScanOptions) {
@@ -96,11 +142,19 @@ export function App() {
     setReceipt(null);
     setIntentSummary(null);
     setSelectedIds(new Set());
+    setPassports(new Map());
     setStep("scan");
 
     try {
       const nextReport = await startScan(options);
       setReport(nextReport);
+      try {
+        const nextPassports = await getReclaimPassports(nextReport.scanId);
+        setPassports(new Map(nextPassports.map((passport) => [passport.findingId, passport])));
+      } catch (passportError) {
+        setError(`Scan completed, but Reclaim Passports failed: ${passportError}`);
+      }
+      await refreshTimeline();
     } catch (scanError) {
       setError(String(scanError));
     } finally {
@@ -166,11 +220,36 @@ export function App() {
       const nextReceipt = await executeCleanupPlan(plan.id, plan.planHash);
       setReceipt(nextReceipt);
       setStep("receipt");
+      await refreshVault();
     } catch (executionError) {
       setError(String(executionError));
     } finally {
       setExecuting(false);
     }
+  }
+
+  async function handleRestore(id: string) {
+    setError(null);
+    setLastRestore(null);
+    setRestoringId(id);
+    try {
+      setLastRestore(await restoreVaultEntry(id));
+      await refreshVault();
+    } catch (restoreError) {
+      setError(String(restoreError));
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  function resetWorkflow() {
+    setReport(null);
+    setPlan(null);
+    setReceipt(null);
+    setIntentSummary(null);
+    setSelectedIds(new Set());
+    setPassports(new Map());
+    setStep("scan");
   }
 
   return (
@@ -198,9 +277,19 @@ export function App() {
               />
             )}
 
+            {step === "timeline" && (
+              <TimelineView
+                timeline={timeline}
+                loading={timelineLoading}
+                onRefresh={refreshTimeline}
+                onScan={() => setStep("scan")}
+              />
+            )}
+
             {step === "findings" && report && (
               <FindingsView
                 report={report}
+                passports={passports}
                 selectedIds={selectedIds}
                 aiStatus={aiStatus}
                 intentLoading={intentLoading}
@@ -225,14 +314,20 @@ export function App() {
             {step === "receipt" && receipt && (
               <ReceiptView
                 receipt={receipt}
-                onNewScan={() => {
-                  setReport(null);
-                  setPlan(null);
-                  setReceipt(null);
-                  setIntentSummary(null);
-                  setSelectedIds(new Set());
-                  setStep("scan");
-                }}
+                onOpenVault={() => setStep("vault")}
+                onNewScan={resetWorkflow}
+              />
+            )}
+
+            {step === "vault" && (
+              <VaultView
+                entries={vaultEntries}
+                loading={vaultLoading}
+                restoringId={restoringId}
+                lastRestore={lastRestore}
+                error={error}
+                onRefresh={refreshVault}
+                onRestore={handleRestore}
               />
             )}
           </div>
