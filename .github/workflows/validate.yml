@@ -1,0 +1,51 @@
+name: Validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - ".github/workflows/validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Frontend and Rust checks
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate frontend
+        run: |
+          npm run check
+          npm run build
+
+      - name: Validate Rust
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo test --quiet
+          cargo clippy --all-targets --quiet -- -D warnings
