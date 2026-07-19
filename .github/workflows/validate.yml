@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: winreclaim-validate
@@ -45,18 +46,34 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Validate frontend
+        id: frontend_validation
+        continue-on-error: true
+        shell: pwsh
         run: |
-          npm run check
-          npm run build
+          $logPath = Join-Path $env:RUNNER_TEMP "frontend-validation.log"
+          Remove-Item $logPath -Force -ErrorAction SilentlyContinue
+          npm run check 2>&1 | Tee-Object -FilePath $logPath -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build 2>&1 | Tee-Object -FilePath $logPath -Append
+          exit $LASTEXITCODE
 
       - name: Normalize and validate Rust
+        id: rust_validation
+        continue-on-error: true
         working-directory: src-tauri
+        shell: pwsh
         run: |
-          cargo fmt
-          cargo test --quiet
-          cargo clippy --all-targets --quiet -- -D warnings
+          $logPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
+          Remove-Item $logPath -Force -ErrorAction SilentlyContinue
+          cargo fmt 2>&1 | Tee-Object -FilePath $logPath -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --quiet 2>&1 | Tee-Object -FilePath $logPath -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --all-targets --quiet -- -D warnings 2>&1 | Tee-Object -FilePath $logPath -Append
+          exit $LASTEXITCODE
 
       - name: Commit normalized Rust source
+        if: steps.frontend_validation.outcome == 'success' && steps.rust_validation.outcome == 'success'
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
@@ -67,3 +84,44 @@ jobs:
             git commit -m "Normalize Rust source"
             git push origin HEAD:main
           }
+
+      - name: Publish validation diagnostics
+        if: steps.frontend_validation.outcome == 'failure' || steps.rust_validation.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $frontendPath = Join-Path $env:RUNNER_TEMP "frontend-validation.log"
+          $rustPath = Join-Path $env:RUNNER_TEMP "rust-validation.log"
+          $frontendLog = if (Test-Path $frontendPath) { (Get-Content $frontendPath -Tail 180) -join "`n" } else { "Frontend validation did not run." }
+          $rustLog = if (Test-Path $rustPath) { (Get-Content $rustPath -Tail 240) -join "`n" } else { "Rust validation did not run." }
+          $bodyPath = Join-Path $env:RUNNER_TEMP "validation-diagnostics.md"
+          @(
+            "# Automated validation diagnostics"
+            ""
+            "Commit: $env:GITHUB_SHA"
+            "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            "Frontend: ${{ steps.frontend_validation.outcome }}"
+            "Rust: ${{ steps.rust_validation.outcome }}"
+            ""
+            "## Frontend"
+            '```text'
+            $frontendLog
+            '```'
+            ""
+            "## Rust"
+            '```text'
+            $rustLog
+            '```'
+          ) | Set-Content $bodyPath -Encoding utf8
+          gh issue reopen 2 --repo $env:GITHUB_REPOSITORY 2>$null
+          gh issue edit 2 --repo $env:GITHUB_REPOSITORY --body-file $bodyPath
+          throw "Validation failed. Issue #2 contains the logs."
+
+      - name: Close resolved validation issue
+        if: steps.frontend_validation.outcome == 'success' && steps.rust_validation.outcome == 'success'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue close 2 --repo $env:GITHUB_REPOSITORY --comment "Frontend and Rust validation passed for $env:GITHUB_SHA." 2>$null
