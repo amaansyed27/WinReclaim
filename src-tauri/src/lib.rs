@@ -1,4 +1,5 @@
 mod actions;
+mod app_data;
 mod commands;
 mod domain;
 mod insights;
@@ -19,6 +20,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            app_data::initialize()
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -36,7 +39,11 @@ pub fn run() {
             commands::get_storage_timeline,
             commands::get_reclaim_passports,
             commands::list_vault_entries,
-            commands::restore_vault_entry
+            commands::restore_vault_entry,
+            commands::get_app_data_summary,
+            commands::clear_scan_history,
+            commands::clear_cleanup_records,
+            commands::reset_app_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running WinReclaim");
