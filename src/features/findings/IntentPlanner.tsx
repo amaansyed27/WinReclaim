@@ -46,7 +46,7 @@ export function IntentPlanner({
               onChange={(event) => setPrompt(event.target.value)}
               maxLength={1000}
               disabled={loading}
-              placeholder="Free some space, but keep local AI models and Android emulators"
+              placeholder="Free some space, but keep Downloads and work folders"
             />
             <button
               className="button button-secondary"
