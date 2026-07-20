@@ -38,8 +38,8 @@ pub fn initialize() -> Result<()> {
     let current = fs::read_to_string(&generation_path).unwrap_or_default();
 
     if current.trim() != DATA_GENERATION {
-        let _ = remove_owned_path(&snapshot_root());
-        let _ = remove_owned_path(&receipt_root());
+        remove_owned_path(&snapshot_root())?;
+        remove_owned_path(&receipt_root())?;
         fs::write(generation_path, DATA_GENERATION)?;
     }
 
@@ -86,10 +86,7 @@ pub fn reset(request: &ResetAppRequest) -> Result<AppDataMutation> {
     };
 
     for entry in fs::read_dir(&root)? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
+        let entry = entry?;
         let name = entry.file_name();
         if name == DATA_GENERATION_FILE {
             continue;
