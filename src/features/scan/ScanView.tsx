@@ -26,31 +26,52 @@ const profiles: ScanProfile[] = ["quick", "balanced", "deep", "ultra"];
 
 const modeCopy: Record<ScanProfile, string> = {
   quick: "Checks common temporary files. Fastest.",
-  balanced: "Checks the places most people need. Recommended.",
-  deep: "Checks more app and project folders.",
-  ultra: "Checks every supported location. Slowest."
+  balanced: "Checks common cleanup locations. Recommended for most people.",
+  deep: "Also inspects build folders, app data and other large locations.",
+  ultra: "Checks every supported location with the broadest search. Slowest."
 };
 
-const defaultOptions: ScanOptions = {
-  mode: "balanced",
-  includeKnownTargets: true,
-  includeProjectOutputs: true,
-  discoverUnknown: true,
-  includeAppData: true,
-  includeSystemDriveCaches: true,
-  minimumFindingBytes: 256 * 1024 * 1024,
-  maxUnknownFindings: 20
-};
-
-const ultraOptions: ScanOptions = {
-  mode: "deep",
-  includeKnownTargets: true,
-  includeProjectOutputs: true,
-  discoverUnknown: true,
-  includeAppData: true,
-  includeSystemDriveCaches: true,
-  minimumFindingBytes: 64 * 1024 * 1024,
-  maxUnknownFindings: 100
+const profileOptions: Record<ScanProfile, ScanOptions> = {
+  quick: {
+    mode: "quick",
+    includeKnownTargets: true,
+    includeProjectOutputs: false,
+    discoverUnknown: false,
+    includeAppData: false,
+    includeSystemDriveCaches: false,
+    minimumFindingBytes: 512 * 1024 * 1024,
+    maxUnknownFindings: 10
+  },
+  balanced: {
+    mode: "balanced",
+    includeKnownTargets: true,
+    includeProjectOutputs: false,
+    discoverUnknown: false,
+    includeAppData: false,
+    includeSystemDriveCaches: true,
+    minimumFindingBytes: 512 * 1024 * 1024,
+    maxUnknownFindings: 20
+  },
+  deep: {
+    mode: "deep",
+    includeKnownTargets: true,
+    includeProjectOutputs: true,
+    discoverUnknown: true,
+    includeAppData: true,
+    includeSystemDriveCaches: true,
+    minimumFindingBytes: 256 * 1024 * 1024,
+    maxUnknownFindings: 40
+  },
+  ultra: {
+    mode: "deep",
+    includeKnownTargets: true,
+    includeProjectOutputs: true,
+    discoverUnknown: true,
+    includeAppData: true,
+    includeSystemDriveCaches: true,
+    minimumFindingBytes: 64 * 1024 * 1024,
+    maxUnknownFindings: 100
+  }
 };
 
 export function ScanView({
@@ -63,7 +84,7 @@ export function ScanView({
   onContinue
 }: ScanViewProps) {
   const [profile, setProfile] = useState<ScanProfile>("balanced");
-  const [options, setOptions] = useState<ScanOptions>(defaultOptions);
+  const [options, setOptions] = useState<ScanOptions>({ ...profileOptions.balanced });
 
   const progressValue = progress?.totalTargets
     ? Math.round((progress.completedTargets / progress.totalTargets) * 100)
@@ -81,11 +102,7 @@ export function ScanView({
 
   function selectProfile(nextProfile: ScanProfile) {
     setProfile(nextProfile);
-    if (nextProfile === "ultra") {
-      setOptions(ultraOptions);
-      return;
-    }
-    setOptions((current) => ({ ...current, mode: nextProfile }));
+    setOptions({ ...profileOptions[nextProfile] });
   }
 
   return (
@@ -212,7 +229,7 @@ export function ScanView({
 
             <div className="scan-toggles advanced-toggle-grid">
               <Toggle label="Known temporary and cache folders" checked={options.includeKnownTargets} disabled={ultraLocked} onChange={(value) => setFlag("includeKnownTargets", value)} />
-              <Toggle label="Project build files" checked={options.includeProjectOutputs} disabled={ultraLocked} onChange={(value) => setFlag("includeProjectOutputs", value)} />
+              <Toggle label="Build and dependency folders" checked={options.includeProjectOutputs} disabled={ultraLocked} onChange={(value) => setFlag("includeProjectOutputs", value)} />
               <Toggle label="Other large folders" checked={options.discoverUnknown} disabled={ultraLocked} onChange={(value) => setFlag("discoverUnknown", value)} />
               <Toggle label="App data" checked={options.includeAppData} disabled={!options.discoverUnknown || ultraLocked} onChange={(value) => setFlag("includeAppData", value)} />
               <Toggle label="Windows cache folders" checked={options.includeSystemDriveCaches} disabled={ultraLocked} onChange={(value) => setFlag("includeSystemDriveCaches", value)} />
@@ -225,7 +242,7 @@ export function ScanView({
         <ShieldIcon />
         <div>
           <strong>Designed to avoid important files</strong>
-          <span>Unknown folders, browser profiles, local AI models and project source are never automatically selected.</span>
+          <span>Personal files, installed apps and folders without a verified cleanup rule are never automatically selected.</span>
         </div>
       </section>
     </section>
