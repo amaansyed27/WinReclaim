@@ -12,10 +12,10 @@ interface VaultViewProps {
 }
 
 const statusLabels: Record<VaultEntry["status"], string> = {
-  active: "Can be restored",
-  restored: "Restored",
-  partially_restored: "Some files restored",
-  expired: "No longer available"
+  active: "Ready to restore",
+  restored: "Already restored",
+  partially_restored: "Partly restored",
+  expired: "Expired"
 };
 
 export function VaultView({
@@ -31,35 +31,26 @@ export function VaultView({
   const reversibleBytes = active.reduce((sum, entry) => sum + entry.storedBytes, 0);
 
   return (
-    <section className="page vault-view">
-      <header className="page-header">
+    <section className="page vault-view simple-vault-view">
+      <header className="page-header simple-page-header">
         <div>
           <span className="page-kicker">Restore files</span>
-          <h1>Undo a cleanup</h1>
-          <p>Some cleaned files are kept on this PC for seven days so you can put them back.</p>
+          <h1>Undo a recent cleanup</h1>
+          <p>Temporary files saved by WinReclaim remain available for seven days.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
-      <div className="vault-metrics">
-        <section className="surface vault-metric">
-          <span>Files you can restore</span>
+      <section className="surface simple-restore-summary">
+        <div>
+          <span className="surface-label">Available to restore</span>
           <strong>{formatBytes(reversibleBytes)}</strong>
-          <small>{active.length} cleanup groups available</small>
-        </section>
-        <section className="surface vault-metric">
-          <span>Kept for</span>
-          <strong>7 days</strong>
-          <small>stored only on this PC</small>
-        </section>
-        <section className="surface vault-metric">
-          <span>Existing files</span>
-          <strong>Never replaced</strong>
-          <small>files already in their original place are skipped</small>
-        </section>
-      </div>
+          <p>{active.length} cleanup group{active.length === 1 ? "" : "s"} can still be restored.</p>
+        </div>
+        <span>Kept for 7 days</span>
+      </section>
 
       {lastRestore && (
         <div className="vault-result-banner">
@@ -69,44 +60,44 @@ export function VaultView({
       )}
       {error && <p className="error-banner">{error}</p>}
 
-      <section className="surface vault-list-card">
+      <section className="surface simple-vault-list">
         <header>
-          <div>
-            <span className="surface-label">Saved cleanup groups</span>
-            <strong>Files available to restore</strong>
-          </div>
-          <span>{entries.length} groups</span>
+          <strong>Recent cleanups</strong>
+          <span>{entries.length}</span>
         </header>
 
         {!entries.length ? (
           <div className="vault-empty">
             <strong>Nothing to restore</strong>
-            <span>Eligible temporary files and crash reports will appear here after cleanup.</span>
+            <span>Restorable files will appear here after a cleanup.</span>
           </div>
         ) : (
           <div className="vault-entry-list">
             {entries.map((entry) => (
-              <article className={`vault-entry status-${entry.status}`} key={entry.id}>
+              <article className={`vault-entry simple-vault-entry status-${entry.status}`} key={entry.id}>
                 <div className="vault-entry-main">
                   <div className="vault-entry-title">
                     <strong>{entry.displayName}</strong>
                     <span>{statusLabels[entry.status]}</span>
                   </div>
-                  <code>{entry.originalRoot}</code>
-                  <p>
-                    Cleaned {formatDate(entry.createdAt)} · Available until {formatDate(entry.expiresAt)} · {entry.relativePaths.length} files
-                  </p>
+                  <p>Cleaned {formatDate(entry.createdAt)} · {entry.relativePaths.length} file{entry.relativePaths.length === 1 ? "" : "s"}</p>
+                  <details className="finding-details">
+                    <summary>More details</summary>
+                    <div className="finding-details-content">
+                      <code>{entry.originalRoot}</code>
+                      <p>Available until {formatDate(entry.expiresAt)}</p>
+                    </div>
+                  </details>
                 </div>
                 <div className="vault-entry-size">
                   <strong>{formatBytes(entry.storedBytes)}</strong>
-                  <span>Result {entry.receiptId.slice(0, 8)}</span>
                 </div>
                 <button
                   className="button button-primary"
                   disabled={entry.status !== "active" || restoringId !== null}
                   onClick={() => onRestore(entry.id)}
                 >
-                  {restoringId === entry.id ? "Restoring…" : "Restore files"}
+                  {restoringId === entry.id ? "Restoring…" : "Restore"}
                 </button>
               </article>
             ))}
