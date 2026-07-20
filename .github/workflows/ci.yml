@@ -9,34 +9,40 @@ on:
 jobs:
   validate:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 25
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+          cache: npm
 
       - name: Install frontend dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
-      - name: Frontend type check
+      - name: Check frontend and product integrity
         run: npm run check
 
-      - name: Frontend build
+      - name: Build frontend
         run: npm run build
 
-      - name: Rust tests
-        working-directory: src-tauri
-        run: cargo test
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.85
+        with:
+          components: rustfmt, clippy
 
-      - name: Rust check
-        working-directory: src-tauri
-        run: cargo check --all-targets
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
-      - name: Rust clippy
-        working-directory: src-tauri
-        run: cargo clippy --all-targets
+      - name: Check Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Test Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
