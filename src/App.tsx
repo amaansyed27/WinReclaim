@@ -36,12 +36,12 @@ import type {
 export type AppStep = "scan" | "timeline" | "findings" | "plan" | "receipt" | "vault";
 
 const pageTitles: Record<AppStep, string> = {
-  scan: "Storage scan",
-  timeline: "Storage Time Machine",
-  findings: "Reclaim Passports",
-  plan: "Reclaim Simulation",
-  receipt: "Cleanup receipt",
-  vault: "Undo Vault"
+  scan: "Clean up",
+  timeline: "History",
+  findings: "Choose what to clean",
+  plan: "Confirm cleanup",
+  receipt: "Cleanup complete",
+  vault: "Restore files"
 };
 
 export function App() {
@@ -74,15 +74,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    getAiStatus()
-      .then(setAiStatus)
-      .catch(() => {
-        setAiStatus({
-          configured: false,
-          model: "gpt-5.6",
-          privacyNote: "Only anonymized category, size, risk and consequence metadata is sent. Paths remain local."
-        });
-      });
+    getAiStatus().then(setAiStatus).catch(() => setAiStatus(null));
     void refreshTimeline();
     void refreshVault();
   }, []);
@@ -151,8 +143,8 @@ export function App() {
       try {
         const nextPassports = await getReclaimPassports(nextReport.scanId);
         setPassports(new Map(nextPassports.map((passport) => [passport.findingId, passport])));
-      } catch (passportError) {
-        setError(`Scan completed, but Reclaim Passports failed: ${passportError}`);
+      } catch (detailsError) {
+        setError(`Scan completed, but some item details could not be loaded: ${detailsError}`);
       }
       await refreshTimeline();
     } catch (scanError) {
