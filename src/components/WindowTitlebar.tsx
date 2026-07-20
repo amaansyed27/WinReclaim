@@ -5,8 +5,18 @@ interface WindowTitlebarProps {
   pageTitle: string;
 }
 
+const friendlyTitles: Record<string, string> = {
+  "Storage scan": "Scan PC",
+  "Storage Time Machine": "Storage history",
+  "Reclaim Passports": "Choose items",
+  "Reclaim Simulation": "Review cleanup",
+  "Cleanup receipt": "Cleanup results",
+  "Undo Vault": "Restore files"
+};
+
 export function WindowTitlebar({ pageTitle }: WindowTitlebarProps) {
   const [maximized, setMaximized] = useState(false);
+  const displayTitle = friendlyTitles[pageTitle] ?? pageTitle;
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -50,7 +60,7 @@ export function WindowTitlebar({ pageTitle }: WindowTitlebarProps) {
           </span>
           <strong data-tauri-drag-region="deep">WinReclaim</strong>
           <span className="window-title-separator" data-tauri-drag-region="deep" />
-          <span data-tauri-drag-region="deep">{pageTitle}</span>
+          <span data-tauri-drag-region="deep">{displayTitle}</span>
         </div>
       </div>
 
