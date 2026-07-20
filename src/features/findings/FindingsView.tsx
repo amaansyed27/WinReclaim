@@ -51,6 +51,9 @@ export function FindingsView({
   const allReviewOnly = report.findings
     .filter((finding) => !finding.actionAvailable)
     .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
+  const rebuildable = allOptional.filter(
+    (finding) => finding.riskClass === "rebuild_or_redownload"
+  );
 
   const recommended = allRecommended.filter(matchesQuery);
   const optional = allOptional.filter(matchesQuery);
@@ -63,7 +66,7 @@ export function FindingsView({
   const optionalBytes = optional.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const reviewOnlyBytes = reviewOnly.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const allRecommendedBytes = allRecommended.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
-  const allOptionalBytes = allOptional.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
+  const rebuildableBytes = rebuildable.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const visibleCount = recommended.length + optional.length + reviewOnly.length;
 
   function selectFindings(findings: Finding[]) {
@@ -77,7 +80,7 @@ export function FindingsView({
   }
 
   function selectRebuildable() {
-    selectFindings(allOptional);
+    selectFindings(rebuildable);
   }
 
   function clearSelection() {
@@ -113,8 +116,8 @@ export function FindingsView({
         </div>
         <div className="recommendation-actions">
           <button className="button button-primary" onClick={selectRecommended} disabled={!allRecommended.length}>Use recommendation</button>
-          <button className="button button-secondary" onClick={selectRebuildable} disabled={!allOptional.length}>
-            Select rebuildable caches ({formatBytes(allOptionalBytes)})
+          <button className="button button-secondary" onClick={selectRebuildable} disabled={!rebuildable.length}>
+            Select rebuildable caches ({formatBytes(rebuildableBytes)})
           </button>
           <button className="button button-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear selection</button>
         </div>
@@ -157,7 +160,7 @@ export function FindingsView({
       {optional.length > 0 && (
         <FindingSection
           title="Optional cleanup"
-          note="Rebuildable or redownloadable data. Review the stated consequence before selecting it."
+          note="Rebuildable, redownloadable or destructive actions. Review the stated consequence before selecting them."
           items={optional}
           bytes={optionalBytes}
           passports={passports}
