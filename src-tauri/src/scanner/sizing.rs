@@ -28,11 +28,7 @@ pub fn recycle_bin_size() -> SizeStats {
         .unwrap_or_default()
 }
 
-fn walk_size(
-    root: &Path,
-    cancel: &AtomicBool,
-    allowed_extensions: Option<&[&str]>,
-) -> SizeStats {
+fn walk_size(root: &Path, cancel: &AtomicBool, allowed_extensions: Option<&[&str]>) -> SizeStats {
     if !root.exists() {
         return SizeStats::default();
     }
