@@ -1,12 +1,13 @@
+use crate::domain::ActionKind;
 use crate::platform::windows::{
-    canonical_is_within, is_reparse_point, local_app_data, windows_directory,
+    canonical_is_within, is_reparse_point, local_app_data, user_profile, windows_directory,
 };
-use crate::policy::{temp_minimum_age, VAULT_RETENTION_DAYS};
+use crate::policy::VAULT_RETENTION_DAYS;
+use crate::rules::known_targets;
 use crate::vault::quarantine_files;
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -17,24 +18,17 @@ pub struct FilesystemOutcome {
     pub vault_entry_ids: Vec<Uuid>,
 }
 
-pub fn quarantine_user_temp(
-    target: &Path,
-    receipt_id: Uuid,
-    finding_id: Uuid,
-    display_name: &str,
-) -> Result<FilesystemOutcome> {
+pub fn clean_user_temp(target: &Path) -> Result<FilesystemOutcome> {
     let allowed = local_app_data()
         .ok_or_else(|| anyhow!("LOCALAPPDATA is unavailable"))?
         .join("Temp");
     validate_exact_target(target, &allowed)?;
-    quarantine_tree(
+    delete_tree(
         target,
-        Some(temp_minimum_age()),
         None,
-        receipt_id,
-        finding_id,
-        display_name,
-        "stale temporary",
+        true,
+        "temporary",
+        "Windows-locked, active or inaccessible entries were skipped",
     )
 }
 
@@ -43,10 +37,33 @@ pub fn clean_system_temp(target: &Path) -> Result<FilesystemOutcome> {
     validate_exact_target(target, &allowed)?;
     delete_tree(
         target,
-        Some(temp_minimum_age()),
         None,
         true,
-        "stale Windows Temp",
+        "Windows Temp",
+        "Windows-locked, active, inaccessible or administrator-protected entries were skipped",
+    )
+}
+
+pub fn clean_prefetch(target: &Path) -> Result<FilesystemOutcome> {
+    let allowed = windows_directory()?.join("Prefetch");
+    validate_exact_target(target, &allowed)?;
+    delete_tree(
+        target,
+        None,
+        true,
+        "Prefetch",
+        "Windows-locked, active, inaccessible or administrator-protected entries were skipped",
+    )
+}
+
+pub fn clean_generic_directory(target: &Path) -> Result<FilesystemOutcome> {
+    validate_generic_target(target)?;
+    delete_tree(
+        target,
+        None,
+        true,
+        "rebuildable cache or generated",
+        "Locked, active or inaccessible entries were skipped",
     )
 }
 
@@ -62,7 +79,6 @@ pub fn quarantine_crash_dumps(
     validate_exact_target(target, &allowed)?;
     quarantine_tree(
         target,
-        None,
         Some(&["dmp", "mdmp", "wer"]),
         receipt_id,
         finding_id,
@@ -87,10 +103,186 @@ fn validate_exact_target(target: &Path, allowed: &Path) -> Result<()> {
     Ok(())
 }
 
+fn validate_generic_target(target: &Path) -> Result<()> {
+    if !target.exists() {
+        return Ok(());
+    }
+    let metadata = fs::symlink_metadata(target)?;
+    if !metadata.is_dir() || is_reparse_point(&metadata) {
+        return Err(anyhow!("Generic cleanup targets must be normal directories"));
+    }
+
+    if is_known_generic_target(target)?
+        || is_verified_project_output(target)?
+        || is_safe_dynamic_cache(target)?
+    {
+        return Ok(());
+    }
+
+    Err(anyhow!(
+        "The selected directory no longer matches a verified rebuildable cache or generated-output fingerprint"
+    ))
+}
+
+fn is_known_generic_target(target: &Path) -> Result<bool> {
+    Ok(known_targets()?.into_iter().any(|candidate| {
+        candidate.action_kind == Some(ActionKind::GenericDirectory)
+            && paths_equal(target, &candidate.path)
+    }))
+}
+
+fn is_verified_project_output(target: &Path) -> Result<bool> {
+    let user = user_profile()?;
+    if !canonical_is_within(target, &user)? || paths_equal(target, &user) {
+        return Ok(false);
+    }
+    let Some(name) = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+    else {
+        return Ok(false);
+    };
+    let parent = target.parent().unwrap_or(target);
+    let valid = match name.as_str() {
+        "node_modules" => has_any_marker(
+            parent,
+            &[
+                "package.json",
+                "package-lock.json",
+                "pnpm-lock.yaml",
+                "yarn.lock",
+                "bun.lock",
+                "bun.lockb",
+            ],
+        ),
+        "target" => parent.join("Cargo.toml").is_file(),
+        ".venv" | "venv" => target.join("pyvenv.cfg").is_file(),
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" => {
+            has_project_marker(parent)
+        }
+        _ => false,
+    };
+    Ok(valid)
+}
+
+fn is_safe_dynamic_cache(target: &Path) -> Result<bool> {
+    let user = user_profile()?;
+    if !canonical_is_within(target, &user)? || paths_equal(target, &user) {
+        return Ok(false);
+    }
+    let depth = target
+        .strip_prefix(&user)
+        .map(|relative| relative.components().count())
+        .unwrap_or_default();
+    if depth < 2 {
+        return Ok(false);
+    }
+
+    let Some(name) = target.file_name().and_then(|value| value.to_str()) else {
+        return Ok(false);
+    };
+    if !is_cache_like_name(name) || has_protected_component(target) {
+        return Ok(false);
+    }
+
+    for candidate in known_targets()? {
+        if candidate.action_kind != Some(ActionKind::GenericDirectory)
+            && paths_overlap(target, &candidate.path)
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn is_cache_like_name(name: &str) -> bool {
+    let lower = name.trim().to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "cache"
+            | "caches"
+            | "cache2"
+            | "tmp"
+            | "temp"
+            | "computecache"
+            | "gpucache"
+            | "shadercache"
+            | "code cache"
+            | "media cache"
+            | "preview cache"
+            | "thumbnail cache"
+            | "node-compile-cache"
+    ) || lower.ends_with("-cache")
+        || lower.ends_with("_cache")
+}
+
+fn has_protected_component(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component.as_os_str().to_string_lossy().to_ascii_lowercase().as_str(),
+            ".git"
+                | ".hg"
+                | ".svn"
+                | ".ollama"
+                | "models"
+                | "model"
+                | "checkpoints"
+                | "weights"
+                | "user data"
+                | "profiles"
+                | "extensions"
+                | "vault"
+                | "snapshots"
+        )
+    })
+}
+
+fn has_project_marker(directory: &Path) -> bool {
+    has_any_marker(
+        directory,
+        &[
+            "package.json",
+            "Cargo.toml",
+            "pyproject.toml",
+            "requirements.txt",
+            "CMakeLists.txt",
+            "pubspec.yaml",
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+        ],
+    )
+}
+
+fn has_any_marker(directory: &Path, names: &[&str]) -> bool {
+    names.iter().any(|name| directory.join(name).is_file())
+}
+
+fn paths_equal(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left
+            .to_string_lossy()
+            .trim_end_matches(['\\', '/'])
+            .eq_ignore_ascii_case(
+                right
+                    .to_string_lossy()
+                    .trim_end_matches(['\\', '/']),
+            ),
+    }
+}
+
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    let left = left.canonicalize().unwrap_or_else(|_| left.to_path_buf());
+    let right = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+    left.starts_with(&right) || right.starts_with(&left)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn quarantine_tree(
     root: &Path,
-    minimum_age: Option<Duration>,
     allowed_extensions: Option<&[&str]>,
     receipt_id: Uuid,
     finding_id: Uuid,
@@ -106,8 +298,7 @@ fn quarantine_tree(
         });
     }
 
-    let (files, mut directories, discovery_skipped) =
-        collect_eligible_files(root, minimum_age, allowed_extensions);
+    let (files, mut directories, discovery_skipped) = collect_files(root, allowed_extensions);
     let outcome = quarantine_files(root, &files, receipt_id, finding_id, display_name)?;
     let mut removed_directories = 0_u64;
     directories.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
@@ -147,10 +338,10 @@ fn quarantine_tree(
 
 fn delete_tree(
     root: &Path,
-    minimum_age: Option<Duration>,
     allowed_extensions: Option<&[&str]>,
     remove_empty_directories: bool,
     noun: &str,
+    skip_reason: &str,
 ) -> Result<FilesystemOutcome> {
     if !root.exists() {
         return Ok(FilesystemOutcome {
@@ -161,8 +352,7 @@ fn delete_tree(
         });
     }
 
-    let (files, mut directories, discovery_skipped) =
-        collect_eligible_files(root, minimum_age, allowed_extensions);
+    let (files, mut directories, discovery_skipped) = collect_files(root, allowed_extensions);
     let mut removed_files = 0_u64;
     let mut skipped_entries = discovery_skipped;
     for file in files {
@@ -176,22 +366,24 @@ fn delete_tree(
     if remove_empty_directories {
         directories.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
         for directory in directories {
-            if directory != root && fs::remove_dir(&directory).is_ok() {
-                removed_directories = removed_directories.saturating_add(1);
+            if directory != root {
+                match fs::remove_dir(&directory) {
+                    Ok(()) => removed_directories = removed_directories.saturating_add(1),
+                    Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {}
+                    Err(_) => skipped_entries = skipped_entries.saturating_add(1),
+                }
             }
         }
     }
     let affected_entries = removed_files.saturating_add(removed_directories);
-    let message = if removed_files > 0 {
+    let message = if affected_entries > 0 {
         format!(
-            "Removed {removed_files} {noun} files; skipped {skipped_entries}. This exact-root action is not stored in the Undo Vault."
+            "Removed {removed_files} {noun} files and {removed_directories} empty folders; skipped {skipped_entries}. {skip_reason}. This action is not stored in Restore files."
         )
     } else if skipped_entries > 0 {
-        format!(
-            "No eligible {noun} files were removed; skipped {skipped_entries}. Administrator rights or unlocked files may be required."
-        )
+        format!("No {noun} entries were removed; skipped {skipped_entries}. {skip_reason}.")
     } else {
-        format!("No eligible {noun} files were available")
+        format!("No {noun} entries were available")
     };
 
     Ok(FilesystemOutcome {
@@ -202,12 +394,10 @@ fn delete_tree(
     })
 }
 
-fn collect_eligible_files(
+fn collect_files(
     root: &Path,
-    minimum_age: Option<Duration>,
     allowed_extensions: Option<&[&str]>,
 ) -> (Vec<PathBuf>, Vec<PathBuf>, u64) {
-    let now = SystemTime::now();
     let mut files = Vec::new();
     let mut directories = Vec::new();
     let mut stack = vec![PathBuf::from(root)];
@@ -236,18 +426,6 @@ fn collect_eligible_files(
                     continue;
                 }
             }
-            if let Some(age) = minimum_age {
-                let modified = match metadata.modified() {
-                    Ok(value) => value,
-                    Err(_) => {
-                        skipped = skipped.saturating_add(1);
-                        continue;
-                    }
-                };
-                if now.duration_since(modified).unwrap_or_default() < age {
-                    continue;
-                }
-            }
             files.push(path);
         } else if metadata.is_dir() {
             directories.push(path.clone());
@@ -273,13 +451,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn refuses_arbitrary_target() {
+    fn refuses_arbitrary_temp_target() {
         let arbitrary =
             std::env::temp_dir().join(format!("winreclaim-arbitrary-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&arbitrary).unwrap();
-        assert!(
-            quarantine_user_temp(&arbitrary, Uuid::new_v4(), Uuid::new_v4(), "Fixture").is_err()
-        );
+        assert!(clean_user_temp(&arbitrary).is_err());
         fs::remove_dir_all(arbitrary).unwrap();
+    }
+
+    #[test]
+    fn recognises_portable_cache_names() {
+        for name in ["Cache", "ComputeCache", "shader-cache", "node-compile-cache", "tmp"] {
+            assert!(is_cache_like_name(name));
+        }
+        for name in ["models", "User Data", "Documents", "plugins"] {
+            assert!(!is_cache_like_name(name));
+        }
     }
 }
