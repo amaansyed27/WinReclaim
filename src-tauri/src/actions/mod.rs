@@ -17,28 +17,12 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
     let recovery_class = recovery_class_for_action(item.action_kind);
 
     let outcome: Result<(u64, u64, String, Vec<Uuid>)> = match item.action_kind {
-        ActionKind::UserTemp => filesystem::quarantine_user_temp(
-            target,
-            receipt_id,
-            item.finding_id,
-            &item.display_name,
-        )
-        .map(|outcome| {
-            (
-                outcome.affected_entries,
-                outcome.skipped_entries,
-                outcome.message,
-                outcome.vault_entry_ids,
-            )
-        }),
-        ActionKind::SystemTemp => filesystem::clean_system_temp(target).map(|outcome| {
-            (
-                outcome.affected_entries,
-                outcome.skipped_entries,
-                outcome.message,
-                outcome.vault_entry_ids,
-            )
-        }),
+        ActionKind::UserTemp => filesystem::clean_user_temp(target).map(map_filesystem_outcome),
+        ActionKind::SystemTemp => filesystem::clean_system_temp(target).map(map_filesystem_outcome),
+        ActionKind::Prefetch => filesystem::clean_prefetch(target).map(map_filesystem_outcome),
+        ActionKind::GenericDirectory => {
+            filesystem::clean_generic_directory(target).map(map_filesystem_outcome)
+        }
         ActionKind::RecycleBin => empty_recycle_bin().map(|()| {
             (
                 0,
@@ -53,14 +37,7 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
             item.finding_id,
             &item.display_name,
         )
-        .map(|outcome| {
-            (
-                outcome.affected_entries,
-                outcome.skipped_entries,
-                outcome.message,
-                outcome.vault_entry_ids,
-            )
-        }),
+        .map(map_filesystem_outcome),
         ActionKind::HuggingfacePrune => external::prune_huggingface()
             .map(|(deleted, skipped, message)| (deleted, skipped, message, Vec::new())),
         ActionKind::NpmCache => external::clean_npm_cache()
@@ -98,6 +75,17 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
             vault_entry_ids: Vec::new(),
         },
     }
+}
+
+fn map_filesystem_outcome(
+    outcome: filesystem::FilesystemOutcome,
+) -> (u64, u64, String, Vec<Uuid>) {
+    (
+        outcome.affected_entries,
+        outcome.skipped_entries,
+        outcome.message,
+        outcome.vault_entry_ids,
+    )
 }
 
 fn measure_target(action: ActionKind, target: &Path, cancel: &AtomicBool) -> u64 {
