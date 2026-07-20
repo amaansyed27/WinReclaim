@@ -1,5 +1,6 @@
 import { ReceiptIcon, ShieldIcon } from "../../components/Icons";
 import { formatBytes, formatDate } from "../../lib/format";
+import { recoveryLabel } from "../../lib/plainLanguage";
 import type { CleanupReceipt } from "../../types";
 
 interface ReceiptViewProps {
@@ -39,14 +40,14 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
     context.fillText(formatBytes(receipt.actualReclaimedBytes), 72, 238);
     context.fillStyle = "#8ea4bf";
     context.font = "500 32px Segoe UI";
-    context.fillText("reclaimed from this Windows profile", 76, 288);
+    context.fillText("freed from this Windows account", 76, 288);
     context.fillStyle = "#65b4ff";
     context.font = "600 26px Segoe UI";
     context.fillText(`${successful} completed · ${skipped} skipped`, 76, 386);
     context.fillStyle = "#8ea4bf";
     context.font = "500 24px Segoe UI";
-    context.fillText(`${formatBytes(reversible)} available in Undo Vault`, 76, 438);
-    context.fillText("Local scan · simulated plan · verified receipt", 76, 526);
+    context.fillText(`${formatBytes(reversible)} can be restored`, 76, 438);
+    context.fillText("Local scan · reviewed cleanup · checked result", 76, 526);
     const link = document.createElement("a");
     link.download = `winreclaim-${receipt.id.slice(0, 8)}.png`;
     link.href = canvas.toDataURL("image/png");
@@ -57,39 +58,39 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
     <section className="page receipt-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Completed</span>
-          <h1>Cleanup receipt</h1>
+          <span className="page-kicker">Cleanup finished</span>
+          <h1>Cleanup results</h1>
           <p>{formatDate(receipt.completedAt)}</p>
         </div>
-        <span className="status-chip is-ready">Verified</span>
+        <span className="status-chip is-ready">Completed and checked</span>
       </header>
 
       <div className="receipt-summary-grid">
         <section className="surface receipt-primary-summary">
           <span className="receipt-summary-icon"><ReceiptIcon /></span>
-          <span>Measured reclaim</span>
+          <span>Space freed</span>
           <strong>{formatBytes(receipt.actualReclaimedBytes)}</strong>
-          <small>{successful} actions completed · {skipped} entries skipped</small>
+          <small>{successful} items completed · {skipped} files skipped</small>
         </section>
-        <section className="surface receipt-metric"><span>Estimated</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></section>
-        <section className="surface receipt-metric"><span>Undo Vault</span><strong>{formatBytes(reversible)}</strong></section>
+        <section className="surface receipt-metric"><span>Expected</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></section>
+        <section className="surface receipt-metric"><span>Can restore</span><strong>{formatBytes(reversible)}</strong></section>
       </div>
 
       {receipt.vaultEntryIds.length > 0 && (
         <button className="vault-callout" onClick={onOpenVault}>
           <div>
-            <strong>{receipt.vaultEntryIds.length} reversible cleanup manifest{receipt.vaultEntryIds.length === 1 ? "" : "s"}</strong>
-            <span>Restore eligible files for seven days without overwriting existing paths.</span>
+            <strong>{receipt.vaultEntryIds.length} cleanup group{receipt.vaultEntryIds.length === 1 ? " can" : "s can"} be restored</strong>
+            <span>Eligible files are kept for seven days. Existing files are never replaced.</span>
           </div>
-          <span>Open Undo Vault →</span>
+          <span>Open Restore files →</span>
         </button>
       )}
 
       <section className="surface receipt-detail">
         <header>
           <div>
-            <strong>Execution results</strong>
-            <span>Receipt {receipt.id.slice(0, 8)}</span>
+            <strong>What happened</strong>
+            <span>Result {receipt.id.slice(0, 8)}</span>
           </div>
           <code>{receipt.planHash.slice(0, 20)}…</code>
         </header>
@@ -101,7 +102,7 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
                 <div className="receipt-result-title">
                   <strong>{result.displayName}</strong>
                   <i className={`recovery-badge recovery-${result.recoveryClass}`}>
-                    {result.recoveryClass.replaceAll("_", " ")}
+                    {recoveryLabel(result.recoveryClass)}
                   </i>
                 </div>
                 <span>{result.message}</span>
@@ -116,16 +117,16 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
         <div className="receipt-protected">
           <ShieldIcon />
           <div>
-            <strong>Protected categories untouched</strong>
+            <strong>Important data was left untouched</strong>
             <p>{receipt.protectedSummary.join(" · ")}</p>
           </div>
         </div>
       </section>
 
       <footer className="page-action-row">
-        <button className="button button-primary" onClick={downloadShareCard}>Export card</button>
-        <button className="button button-secondary" onClick={copyJson}>Copy JSON</button>
-        <button className="button button-quiet" onClick={onNewScan}>New scan</button>
+        <button className="button button-primary" onClick={downloadShareCard}>Save summary image</button>
+        <button className="button button-secondary" onClick={copyJson}>Copy technical details</button>
+        <button className="button button-quiet" onClick={onNewScan}>Start another scan</button>
       </footer>
     </section>
   );
