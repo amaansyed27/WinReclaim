@@ -150,6 +150,7 @@ mod tests {
             started_at: Utc::now(),
             completed_at: Utc::now(),
             root: std::env::temp_dir().to_string_lossy().to_string(),
+            scope_fingerprint: "test-scope".into(),
             disk: DiskSnapshot {
                 root: "/".into(),
                 total_bytes: 1000,
