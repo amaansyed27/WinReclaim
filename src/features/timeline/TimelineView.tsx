@@ -13,14 +13,15 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
   const snapshots = timeline?.snapshots ?? [];
   const growth = timeline?.totalGrowthBytes ?? 0;
   const positive = growth >= 0;
+  const changes = timeline?.deltas ?? [];
 
   return (
-    <section className="page timeline-view">
-      <header className="page-header">
+    <section className="page timeline-view simple-timeline-view">
+      <header className="page-header simple-page-header">
         <div>
-          <span className="page-kicker">Storage history</span>
+          <span className="page-kicker">History</span>
           <h1>See what changed</h1>
-          <p>Compare scans to see what used more space and what freed space.</p>
+          <p>WinReclaim compares your scans and shows where storage increased or decreased.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
@@ -28,64 +29,67 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
       </header>
 
       {!snapshots.length ? (
-        <section className="surface timeline-empty">
-          <strong>No storage history yet</strong>
-          <span>Run a scan now and another one later. WinReclaim will compare them for you.</span>
+        <section className="surface timeline-empty simple-empty-card">
+          <strong>No history yet</strong>
+          <span>Run a scan now and another one later. WinReclaim will compare them automatically.</span>
           <button className="button button-primary" onClick={onScan}>Start a scan</button>
         </section>
       ) : (
         <>
-          <div className="timeline-metrics">
-            <Metric
-              label="Disk change"
-              value={`${positive ? "+" : "−"}${formatBytes(Math.abs(growth))}`}
-              note={timeline?.baselineAvailable ? "since your previous scan" : "another scan is needed"}
-              tone={positive ? "warning" : "success"}
-            />
-            <Metric
-              label="Can be cleaned"
-              value={formatBytes(timeline?.reclaimableGrowthBytes ?? 0)}
-              note="space with a verified cleanup action"
-              tone="accent"
-            />
-            <Metric
-              label="Saved scans"
-              value={String(snapshots.length)}
-              note={`latest: ${formatDate(snapshots[snapshots.length - 1].capturedAt)}`}
-            />
+          <div className="simple-history-summary">
+            <section className={`surface simple-history-metric ${positive ? "is-growth" : "is-smaller"}`}>
+              <span>Since the previous scan</span>
+              <strong>{positive ? "+" : "−"}{formatBytes(Math.abs(growth))}</strong>
+              <small>{timeline?.baselineAvailable ? (positive ? "more space is being used" : "less space is being used") : "run another scan to compare"}</small>
+            </section>
+            <section className="surface simple-history-metric">
+              <span>Recent scan</span>
+              <strong>{formatDate(snapshots[snapshots.length - 1].capturedAt)}</strong>
+              <small>{formatBytes(snapshots[snapshots.length - 1].freeBytes)} free</small>
+            </section>
           </div>
 
-          <section className="surface timeline-chart-card">
+          <section className="surface timeline-chart-card simple-chart-card">
             <header>
               <div>
-                <span className="surface-label">Used space</span>
-                <strong>Disk usage across your scans</strong>
+                <strong>Disk usage over time</strong>
+                <span>{snapshots.length} saved scan{snapshots.length === 1 ? "" : "s"}</span>
               </div>
               <span>{formatBytes(snapshots[snapshots.length - 1].usedBytes)} used</span>
             </header>
             <StorageLineChart snapshots={snapshots} />
           </section>
 
-          <section className="surface timeline-delta-card">
+          <section className="surface simple-change-list">
             <header>
               <div>
-                <span className="surface-label">Likely source</span>
-                <strong>Biggest changes since your previous scan</strong>
+                <strong>Biggest changes</strong>
+                <span>Compared with your previous scan</span>
               </div>
-              <span>{timeline?.deltas.length ?? 0} changed locations</span>
+              <span>{changes.length}</span>
             </header>
             {!timeline?.baselineAvailable ? (
-              <div className="timeline-baseline-note">
-                Run another scan later and WinReclaim will show what changed.
-              </div>
-            ) : !timeline.deltas.length ? (
+              <div className="timeline-baseline-note">Run another scan later to see what changed.</div>
+            ) : !changes.length ? (
               <div className="timeline-baseline-note">No noticeable storage changes were found.</div>
             ) : (
-              <div className="timeline-delta-list">
-                {timeline.deltas.slice(0, 30).map((delta) => (
-                  <DeltaRow delta={delta} key={delta.key} />
-                ))}
-              </div>
+              <>
+                <div className="timeline-delta-list">
+                  {changes.slice(0, 10).map((delta) => (
+                    <DeltaRow delta={delta} key={delta.key} />
+                  ))}
+                </div>
+                {changes.length > 10 && (
+                  <details className="more-history-items">
+                    <summary>Show {changes.length - 10} more changes</summary>
+                    <div className="timeline-delta-list">
+                      {changes.slice(10, 30).map((delta) => (
+                        <DeltaRow delta={delta} key={delta.key} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
             )}
           </section>
         </>
@@ -94,41 +98,23 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
   );
 }
 
-function Metric({
-  label,
-  value,
-  note,
-  tone = "neutral"
-}: {
-  label: string;
-  value: string;
-  note: string;
-  tone?: "neutral" | "accent" | "success" | "warning";
-}) {
-  return (
-    <section className={`surface timeline-metric tone-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </section>
-  );
-}
-
 function DeltaRow({ delta }: { delta: TimelineDelta }) {
   const positive = delta.deltaBytes > 0;
   return (
-    <article className="timeline-delta-row">
+    <article className="timeline-delta-row simple-delta-row">
       <div className={`timeline-delta-mark ${positive ? "is-growth" : "is-reclaimed"}`} />
       <div className="timeline-delta-main">
         <div>
           <strong>{delta.displayName}</strong>
           <span>{delta.owner}</span>
         </div>
-        <code>{delta.path}</code>
-      </div>
-      <div className="timeline-delta-evidence">
-        <span>{delta.confidenceScore}% sure</span>
-        <small>{recoveryLabel(delta.recoveryClass)}</small>
+        <details className="finding-details">
+          <summary>More details</summary>
+          <div className="finding-details-content">
+            <code>{delta.path}</code>
+            <p>{delta.confidenceScore}% confidence · {recoveryLabel(delta.recoveryClass)}</p>
+          </div>
+        </details>
       </div>
       <div className={`timeline-delta-value ${positive ? "is-growth" : "is-reclaimed"}`}>
         <strong>{positive ? "+" : "−"}{formatBytes(Math.abs(delta.deltaBytes))}</strong>
