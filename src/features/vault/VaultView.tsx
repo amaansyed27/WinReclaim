@@ -12,10 +12,10 @@ interface VaultViewProps {
 }
 
 const statusLabels: Record<VaultEntry["status"], string> = {
-  active: "Undo available",
+  active: "Can be restored",
   restored: "Restored",
-  partially_restored: "Partially restored",
-  expired: "Expired"
+  partially_restored: "Some files restored",
+  expired: "No longer available"
 };
 
 export function VaultView({
@@ -34,9 +34,9 @@ export function VaultView({
     <section className="page vault-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Safe Undo Vault</span>
-          <h1>Undo cleanup</h1>
-          <p>File-based cleanup is quarantined locally for seven days before expiry.</p>
+          <span className="page-kicker">Restore files</span>
+          <h1>Undo a cleanup</h1>
+          <p>Some cleaned files are kept on this PC for seven days so you can put them back.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
@@ -45,19 +45,19 @@ export function VaultView({
 
       <div className="vault-metrics">
         <section className="surface vault-metric">
-          <span>Undo available</span>
+          <span>Files you can restore</span>
           <strong>{formatBytes(reversibleBytes)}</strong>
-          <small>{active.length} active vault entries</small>
+          <small>{active.length} cleanup groups available</small>
         </section>
         <section className="surface vault-metric">
-          <span>Retention</span>
+          <span>Kept for</span>
           <strong>7 days</strong>
-          <small>stored under LocalAppData</small>
+          <small>stored only on this PC</small>
         </section>
         <section className="surface vault-metric">
-          <span>Conflict policy</span>
-          <strong>Never overwrite</strong>
-          <small>occupied original paths are skipped</small>
+          <span>Existing files</span>
+          <strong>Never replaced</strong>
+          <small>files already in their original place are skipped</small>
         </section>
       </div>
 
@@ -72,16 +72,16 @@ export function VaultView({
       <section className="surface vault-list-card">
         <header>
           <div>
-            <span className="surface-label">Quarantine manifests</span>
-            <strong>Reversible cleanup history</strong>
+            <span className="surface-label">Saved cleanup groups</span>
+            <strong>Files available to restore</strong>
           </div>
-          <span>{entries.length} entries</span>
+          <span>{entries.length} groups</span>
         </header>
 
         {!entries.length ? (
           <div className="vault-empty">
-            <strong>The Undo Vault is empty</strong>
-            <span>Eligible temporary files and crash dumps will appear here after cleanup.</span>
+            <strong>Nothing to restore</strong>
+            <span>Eligible temporary files and crash reports will appear here after cleanup.</span>
           </div>
         ) : (
           <div className="vault-entry-list">
@@ -94,19 +94,19 @@ export function VaultView({
                   </div>
                   <code>{entry.originalRoot}</code>
                   <p>
-                    Created {formatDate(entry.createdAt)} · Expires {formatDate(entry.expiresAt)} · {entry.relativePaths.length} files
+                    Cleaned {formatDate(entry.createdAt)} · Available until {formatDate(entry.expiresAt)} · {entry.relativePaths.length} files
                   </p>
                 </div>
                 <div className="vault-entry-size">
                   <strong>{formatBytes(entry.storedBytes)}</strong>
-                  <span>Receipt {entry.receiptId.slice(0, 8)}</span>
+                  <span>Result {entry.receiptId.slice(0, 8)}</span>
                 </div>
                 <button
                   className="button button-primary"
                   disabled={entry.status !== "active" || restoringId !== null}
                   onClick={() => onRestore(entry.id)}
                 >
-                  {restoringId === entry.id ? "Restoring…" : "Restore"}
+                  {restoringId === entry.id ? "Restoring…" : "Restore files"}
                 </button>
               </article>
             ))}
