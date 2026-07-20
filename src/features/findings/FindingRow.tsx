@@ -1,12 +1,6 @@
 import { formatBytes, formatDate } from "../../lib/format";
-import type { Finding, ReclaimPassport, RiskClass } from "../../types";
-
-const riskLabels: Record<RiskClass, string> = {
-  safe_now: "Safe now",
-  rebuild_or_redownload: "Rebuild later",
-  review_first: "Review first",
-  protected: "Protected"
-};
+import { recoveryLabel, riskCopy } from "../../lib/plainLanguage";
+import type { Finding, ReclaimPassport } from "../../types";
 
 interface FindingRowProps {
   finding: Finding;
@@ -23,7 +17,7 @@ export function FindingRow({ finding, passport, selected, onToggle }: FindingRow
         className={`finding-select ${selected ? "is-selected" : ""}`}
         disabled={!finding.actionAvailable || finding.riskClass === "protected"}
         onClick={() => onToggle(finding.id)}
-        aria-label={`${selected ? "Remove" : "Add"} ${finding.displayName} from plan`}
+        aria-label={`${selected ? "Remove" : "Add"} ${finding.displayName} ${selected ? "from" : "to"} the cleanup selection`}
       >
         <span />
       </button>
@@ -31,28 +25,28 @@ export function FindingRow({ finding, passport, selected, onToggle }: FindingRow
         <div className="finding-title-line">
           <h3>{finding.displayName}</h3>
           <span className={`risk-label risk-label-${finding.riskClass}`}>
-            {riskLabels[finding.riskClass]}
+            {riskCopy[finding.riskClass].title}
           </span>
         </div>
         <p>{finding.explanation}</p>
         <code>{finding.path}</code>
-        <p className="consequence">{finding.consequence}</p>
+        <p className="consequence"><strong>What happens:</strong> {finding.consequence}</p>
         {passport && (
           <div className="passport-strip">
-            <div><span>Owner</span><strong>{passport.owner}</strong></div>
-            <div><span>Recovery</span><strong>{passport.recoveryClass.replaceAll("_", " ")}</strong></div>
-            <div><span>Confidence</span><strong>{passport.confidenceScore}%</strong></div>
+            <div><span>Made by</span><strong>{passport.owner}</strong></div>
+            <div><span>After cleanup</span><strong>{recoveryLabel(passport.recoveryClass)}</strong></div>
+            <div><span>How sure?</span><strong>{passport.confidenceScore}%</strong></div>
             <div>
-              <span>Last change</span>
+              <span>Last changed</span>
               <strong>{passport.lastChangedAt ? formatDate(passport.lastChangedAt) : "Unknown"}</strong>
             </div>
-            <p>{passport.activityNote} · {passport.recoveryMethod}</p>
+            <p>{passport.activityNote}. {passport.recoveryMethod}</p>
           </div>
         )}
       </div>
       <div className="finding-size">
         <strong>{formatBytes(finding.estimatedBytes)}</strong>
-        <span>{finding.actionAvailable ? "action available" : "inspection only"}</span>
+        <span>{finding.actionAvailable ? "Can be cleaned" : "Information only"}</span>
       </div>
     </article>
   );
