@@ -32,7 +32,7 @@ export function PlanView({ plan, executing, error, onBack, onExecute }: PlanView
         <p>{plan.items.length} item{plan.items.length === 1 ? "" : "s"} will be cleaned.</p>
         {restorableBytes > 0 && (
           <span className="confirmation-restore-note">
-            {formatBytes(restorableBytes)} can be restored for seven days.
+            About {formatBytes(restorableBytes)} is eligible for Restore files after cleanup.
           </span>
         )}
       </section>
@@ -69,8 +69,8 @@ export function PlanView({ plan, executing, error, onBack, onExecute }: PlanView
         <div className="cleanup-technical-content">
           <div className="simulation-stats">
             <div><span>Free space now</span><strong>{formatBytes(simulation.currentFreeBytes)}</strong></div>
-            <div><span>Free space after cleanup</span><strong>{formatBytes(simulation.projectedFreeBytes)}</strong></div>
-            <div><span>Cannot be undone</span><strong>{formatBytes(simulation.irreversibleBytes)}</strong></div>
+            <div><span>Estimated after cleanup</span><strong>{formatBytes(simulation.projectedFreeBytes)}</strong></div>
+            <div><span>Cannot be restored</span><strong>{formatBytes(simulation.irreversibleBytes)}</strong></div>
           </div>
           <div className="simulation-bar" aria-label="Cleanup recovery breakdown">
             <span className="segment-reversible" style={{ width: `${simulation.reversibleBytes / total * 100}%` }} />
