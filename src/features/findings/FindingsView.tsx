@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowIcon, ShieldIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
 import type { AiStatus, Finding, ReclaimPassport, ScanReport } from "../../types";
@@ -29,15 +30,31 @@ export function FindingsView({
   onBack,
   onCreatePlan
 }: FindingsViewProps) {
-  const recommended = report.findings
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matchesQuery = (finding: Finding) =>
+    !normalizedQuery ||
+    [
+      finding.displayName,
+      finding.category,
+      finding.path,
+      finding.explanation,
+      finding.consequence
+    ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+
+  const allRecommended = report.findings
     .filter((finding) => finding.actionAvailable && finding.riskClass === "safe_now")
     .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
-  const optional = report.findings
+  const allOptional = report.findings
     .filter((finding) => finding.actionAvailable && finding.riskClass !== "safe_now")
     .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
-  const reviewOnly = report.findings
+  const allReviewOnly = report.findings
     .filter((finding) => !finding.actionAvailable)
     .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
+
+  const recommended = allRecommended.filter(matchesQuery);
+  const optional = allOptional.filter(matchesQuery);
+  const reviewOnly = allReviewOnly.filter(matchesQuery);
 
   const selectedBytes = report.findings
     .filter((finding) => selectedIds.has(finding.id))
@@ -45,11 +62,22 @@ export function FindingsView({
   const recommendedBytes = recommended.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const optionalBytes = optional.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const reviewOnlyBytes = reviewOnly.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
+  const allRecommendedBytes = allRecommended.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
+  const allOptionalBytes = allOptional.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
+  const visibleCount = recommended.length + optional.length + reviewOnly.length;
 
-  function selectRecommended() {
-    recommended.forEach((finding) => {
+  function selectFindings(findings: Finding[]) {
+    findings.forEach((finding) => {
       if (!selectedIds.has(finding.id)) onToggle(finding.id);
     });
+  }
+
+  function selectRecommended() {
+    selectFindings(allRecommended);
+  }
+
+  function selectRebuildable() {
+    selectFindings(allOptional);
   }
 
   function clearSelection() {
@@ -72,21 +100,38 @@ export function FindingsView({
           <div>
             <span className="surface-label">Recommended cleanup</span>
             <h2>
-              {recommended.length
-                ? `${formatBytes(recommendedBytes)} is ready for review`
+              {allRecommended.length
+                ? `${formatBytes(allRecommendedBytes)} is ready for review`
                 : "No recommended cleanup was found"}
             </h2>
             <p>
-              {recommended.length
-                ? "These locations have verified cleanup actions. Each item below states whether it is restored, recreated or permanently removed."
+              {allRecommended.length
+                ? "Temporary locations are measured in full. Locked, active or inaccessible entries are skipped during cleanup."
                 : "Optional and inspection-only findings are still listed below when the scan discovered them."}
             </p>
           </div>
         </div>
         <div className="recommendation-actions">
-          <button className="button button-primary" onClick={selectRecommended} disabled={!recommended.length}>Use recommendation</button>
+          <button className="button button-primary" onClick={selectRecommended} disabled={!allRecommended.length}>Use recommendation</button>
+          <button className="button button-secondary" onClick={selectRebuildable} disabled={!allOptional.length}>
+            Select rebuildable caches ({formatBytes(allOptionalBytes)})
+          </button>
           <button className="button button-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear selection</button>
         </div>
+      </section>
+
+      <section className="surface finding-filter-bar" aria-label="Filter scan results">
+        <label htmlFor="finding-search">
+          <span>Search results</span>
+          <input
+            id="finding-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name, category or path"
+          />
+        </label>
+        <span>{normalizedQuery ? `${visibleCount} of ${report.findings.length} locations` : `${report.findings.length} locations`}</span>
       </section>
 
       {aiStatus?.configured && (
@@ -112,7 +157,7 @@ export function FindingsView({
       {optional.length > 0 && (
         <FindingSection
           title="Optional cleanup"
-          note="Review the stated consequence before selecting these items."
+          note="Rebuildable or redownloadable data. Review the stated consequence before selecting it."
           items={optional}
           bytes={optionalBytes}
           passports={passports}
@@ -145,6 +190,13 @@ export function FindingsView({
             ))}
           </div>
         </details>
+      )}
+
+      {normalizedQuery && visibleCount === 0 && (
+        <section className="surface simple-empty-card">
+          <strong>No matching locations</strong>
+          <span>Try a folder name, tool name, category or part of a path.</span>
+        </section>
       )}
 
       <footer className="sticky-action-bar simple-sticky-action-bar">
