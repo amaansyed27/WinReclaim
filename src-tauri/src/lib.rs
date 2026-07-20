@@ -20,8 +20,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            app_data::initialize()
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            app_data::initialize().map_err(|error| std::io::Error::other(error.to_string()))?;
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
