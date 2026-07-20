@@ -5,8 +5,10 @@ import { FindingsView } from "./features/findings/FindingsView";
 import { PlanView } from "./features/plan/PlanView";
 import { ReceiptView } from "./features/receipt/ReceiptView";
 import { ScanView } from "./features/scan/ScanView";
+import { SettingsView } from "./features/settings/SettingsView";
 import { TimelineView } from "./features/timeline/TimelineView";
 import { VaultView } from "./features/vault/VaultView";
+import { loadPreferences, resetPreferences, savePreferences, type AppPreferences } from "./lib/settings";
 import {
   cancelScan,
   createCleanupPlan,
@@ -33,7 +35,7 @@ import type {
   VaultEntry
 } from "./types";
 
-export type AppStep = "scan" | "timeline" | "findings" | "plan" | "receipt" | "vault";
+export type AppStep = "scan" | "timeline" | "findings" | "plan" | "receipt" | "vault" | "settings";
 
 const pageTitles: Record<AppStep, string> = {
   scan: "Clean up",
@@ -41,11 +43,13 @@ const pageTitles: Record<AppStep, string> = {
   findings: "Choose what to clean",
   plan: "Confirm cleanup",
   receipt: "Cleanup complete",
-  vault: "Restore files"
+  vault: "Restore files",
+  settings: "Settings"
 };
 
 export function App() {
   const [step, setStep] = useState<AppStep>("scan");
+  const [preferences, setPreferences] = useState<AppPreferences>(() => loadPreferences());
   const [scanning, setScanning] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [intentLoading, setIntentLoading] = useState(false);
@@ -90,7 +94,7 @@ export function App() {
   );
 
   const availableSteps = useMemo(() => {
-    const steps = new Set<AppStep>(["scan", "timeline", "vault"]);
+    const steps = new Set<AppStep>(["scan", "timeline", "vault", "settings"]);
     if (report) steps.add("findings");
     if (plan) steps.add("plan");
     if (receipt) steps.add("receipt");
@@ -99,6 +103,7 @@ export function App() {
 
   function navigate(next: AppStep) {
     if (!availableSteps.has(next)) return;
+    setError(null);
     setStep(next);
     if (next === "timeline") void refreshTimeline();
     if (next === "vault") void refreshVault();
@@ -234,14 +239,47 @@ export function App() {
     }
   }
 
-  function resetWorkflow() {
+  function handlePreferencesChange(next: AppPreferences) {
+    setPreferences(next);
+    savePreferences(next);
+  }
+
+  function clearScanWorkflow() {
     setReport(null);
     setPlan(null);
-    setReceipt(null);
     setIntentSummary(null);
     setSelectedIds(new Set());
     setPassports(new Map());
+    setProgress(null);
+  }
+
+  function resetWorkflow() {
+    clearScanWorkflow();
+    setReceipt(null);
     setStep("scan");
+  }
+
+  function handleHistoryCleared() {
+    clearScanWorkflow();
+    void refreshTimeline();
+  }
+
+  function handleRecordsCleared() {
+    setReceipt(null);
+  }
+
+  function handleAppReset() {
+    const defaults = resetPreferences();
+    setPreferences(defaults);
+    clearScanWorkflow();
+    setReceipt(null);
+    setTimeline(null);
+    setVaultEntries([]);
+    setLastRestore(null);
+    setError(null);
+    setStep("scan");
+    void refreshTimeline();
+    void refreshVault();
   }
 
   return (
@@ -252,6 +290,7 @@ export function App() {
           current={step}
           available={availableSteps}
           scanning={scanning}
+          automaticUpdateChecks={preferences.automaticUpdateChecks}
           onNavigate={navigate}
         />
 
@@ -259,6 +298,7 @@ export function App() {
           <div className="workspace-scroll">
             {step === "scan" && (
               <ScanView
+                key={preferences.defaultScanProfile}
                 scanning={scanning}
                 progress={progress}
                 report={report}
@@ -320,6 +360,17 @@ export function App() {
                 error={error}
                 onRefresh={refreshVault}
                 onRestore={handleRestore}
+              />
+            )}
+
+            {step === "settings" && (
+              <SettingsView
+                preferences={preferences}
+                scanning={scanning}
+                onPreferencesChange={handlePreferencesChange}
+                onHistoryCleared={handleHistoryCleared}
+                onRecordsCleared={handleRecordsCleared}
+                onResetComplete={handleAppReset}
               />
             )}
           </div>
