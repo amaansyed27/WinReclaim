@@ -1,4 +1,4 @@
-import type { ActionKind, RecoveryClass, RiskClass } from "../types";
+import type { RecoveryClass, RiskClass } from "../types";
 
 export const riskCopy: Record<RiskClass, { title: string; note: string }> = {
   safe_now: {
@@ -25,17 +25,6 @@ export const recoveryLabels: Record<RecoveryClass, string> = {
   rebuildable: "Recreated by the app",
   irreversible: "Cannot be undone",
   protected: "Not removable"
-};
-
-export const actionRecoveryLabels: Record<ActionKind, string> = {
-  user_temp: "Can be restored for 7 days",
-  system_temp: "Cannot be undone",
-  prefetch: "Windows recreates it",
-  recycle_bin: "Cannot be undone",
-  crash_dumps: "Can be restored for 7 days",
-  huggingface_prune: "Downloaded again when needed",
-  npm_cache: "Downloaded again when needed",
-  docker_prune: "Cannot be undone"
 };
 
 export function recoveryLabel(recoveryClass: RecoveryClass): string {
