@@ -26,6 +26,7 @@ pub async fn start_scan(
 ) -> Result<ScanReport, String> {
     let app_state = state.inner().clone();
     let scan_state = app_state.clone();
+    let snapshot_request = request.clone();
 
     let mut result =
         tauri::async_runtime::spawn_blocking(move || scan_profile(&app, &scan_state, request))
@@ -33,7 +34,7 @@ pub async fn start_scan(
             .map_err(|error| format!("Scan task failed: {error}"))?
             .map_err(|error| error.to_string())?;
 
-    if let Err(error) = persist_scan_snapshot(&result) {
+    if let Err(error) = persist_scan_snapshot(&result, &snapshot_request) {
         result.errors.push(format!(
             "Storage timeline snapshot could not be saved: {error}"
         ));
@@ -157,14 +158,6 @@ pub async fn execute_cleanup_plan(
             estimated_reclaim_bytes: plan.estimated_reclaim_bytes,
             results,
             vault_entry_ids,
-            protected_summary: vec![
-                "Browser profiles".into(),
-                "Ollama models".into(),
-                "Docker volumes".into(),
-                "Android emulators".into(),
-                "Unverified Windows directories".into(),
-                "Project source".into(),
-            ],
             rule_set_version: plan.rule_set_version.clone(),
         };
 
