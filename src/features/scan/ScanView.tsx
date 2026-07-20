@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ScanIcon, ShieldIcon } from "../../components/Icons";
-import { formatBytes, formatPercent } from "../../lib/format";
+import { formatBytes } from "../../lib/format";
 import type { ScanMode, ScanOptions, ScanProgress, ScanReport } from "../../types";
 
 interface ScanViewProps {
@@ -25,10 +25,10 @@ type ScanProfile = ScanMode | "ultra";
 const profiles: ScanProfile[] = ["quick", "balanced", "deep", "ultra"];
 
 const modeCopy: Record<ScanProfile, string> = {
-  quick: "Checks the most common places. Fastest.",
-  balanced: "Checks common places and project folders. Best for most people.",
-  deep: "Looks through more folders. Finds more, but takes longer.",
-  ultra: "Checks every supported location with the broadest search. Slowest."
+  quick: "Checks common temporary files. Fastest.",
+  balanced: "Checks the places most people need. Recommended.",
+  deep: "Checks more app and project folders.",
+  ultra: "Checks every supported location. Slowest."
 };
 
 const defaultOptions: ScanOptions = {
@@ -68,8 +68,11 @@ export function ScanView({
   const progressValue = progress?.totalTargets
     ? Math.round((progress.completedTargets / progress.totalTargets) * 100)
     : 0;
-  const unknownCount =
-    report?.findings.filter((finding) => finding.ruleId === "dynamic.large_directory").length ?? 0;
+  const cleanableBytes = report?.findings
+    .filter((finding) => finding.actionAvailable)
+    .reduce((sum, finding) => sum + finding.estimatedBytes, 0) ?? 0;
+  const cleanableItems = report?.findings.filter((finding) => finding.actionAvailable).length ?? 0;
+  const reviewOnlyItems = report?.findings.filter((finding) => !finding.actionAvailable).length ?? 0;
   const ultraLocked = profile === "ultra";
 
   function setFlag(key: BooleanScanOption, value: boolean) {
@@ -86,218 +89,145 @@ export function ScanView({
   }
 
   return (
-    <section className="page scan-view">
-      <header className="page-header">
+    <section className="page scan-view simple-scan-view">
+      <header className="page-header simple-page-header">
         <div>
-          <span className="page-kicker">Find space to free</span>
-          <h1>Scan your PC</h1>
-          <p>WinReclaim only looks for files. Nothing is removed until you review and confirm.</p>
+          <span className="page-kicker">WinReclaim</span>
+          <h1>Free up space safely</h1>
+          <p>Scan your PC, review the recommendation, then clean. Nothing is removed without your confirmation.</p>
         </div>
-        <span className={`status-chip ${scanning ? "is-running" : report ? "is-ready" : ""}`}>
-          {scanning ? "Scanning" : report ? "Complete" : "Ready"}
-        </span>
       </header>
 
-      <div className="scan-dashboard">
-        <section className="surface scan-primary-panel">
-          <div className="surface-header">
-            <div className="surface-title">
-              <span className="surface-icon">
-                <ScanIcon />
-              </span>
-              <div>
-                <h2>This Windows account</h2>
-                <span>
-                  {scanning ? progress?.phase ?? "Starting" : report ? "Latest scan" : "Not scanned yet"}
-                </span>
-              </div>
-            </div>
-            {!scanning ? (
-              <button className="button button-primary" onClick={() => onStart(options)}>
-                {report ? "Scan again" : "Start scan"}
-              </button>
-            ) : (
-              <button className="button button-secondary" onClick={onCancel}>
-                Stop scan
-              </button>
-            )}
+      <section className="surface simple-scan-card">
+        {!scanning && !report && (
+          <div className="simple-scan-start">
+            <span className="simple-scan-icon"><ScanIcon /></span>
+            <h2>Find files you no longer need</h2>
+            <p>WinReclaim looks for temporary files, old caches and other space you can safely recover.</p>
+            <button className="button button-primary simple-primary-action" onClick={() => onStart(options)}>
+              Scan my PC
+            </button>
+            <span className="simple-action-note">Recommended scan selected · usually no setup needed</span>
           </div>
+        )}
 
-          {scanning && (
-            <div className="scan-progress-panel">
-              <div className="metric-row">
-                <div>
-                  <span>Progress</span>
-                  <strong>{progressValue}%</strong>
-                </div>
-                <div>
-                  <span>Space found</span>
-                  <strong>{formatBytes(progress?.discoveredBytes ?? 0)}</strong>
-                </div>
-                <div>
-                  <span>Files checked</span>
-                  <strong>{(progress?.scannedEntries ?? 0).toLocaleString()}</strong>
-                </div>
-              </div>
-              <div className="progress-track">
-                <span style={{ width: `${Math.max(3, progressValue)}%` }} />
-              </div>
-              <p className="path-line">{progress?.currentPath ?? "Preparing folders"}</p>
+        {scanning && (
+          <div className="simple-scan-progress">
+            <span className="simple-scan-icon is-scanning"><ScanIcon /></span>
+            <h2>Looking for space you can free</h2>
+            <p>{progress?.phase ?? "Starting scan"}</p>
+            <div className="simple-progress-track" aria-label={`${progressValue}% complete`}>
+              <span style={{ width: `${Math.max(3, progressValue)}%` }} />
             </div>
-          )}
-
-          {report && !scanning && (
-            <>
-              <div className="disk-overview">
-                <div className="disk-copy">
-                  <span>Space currently used</span>
-                  <strong>{formatBytes(report.disk.usedBytes)}</strong>
-                  <small>of {formatBytes(report.disk.totalBytes)}</small>
-                </div>
-                <div className="disk-meter-wrap">
-                  <div className="disk-meter">
-                    <span
-                      style={{
-                        width: formatPercent(report.disk.usedBytes, report.disk.totalBytes)
-                      }}
-                    />
-                  </div>
-                  <div className="disk-meter-labels">
-                    <span>{formatBytes(report.disk.freeBytes)} free</span>
-                    <span>
-                      {report.findings.length} items found · {unknownCount} extra folders
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="scan-result-actions">
-                <button className="button button-primary" onClick={onContinue}>
-                  Review what was found
-                </button>
-              </div>
-            </>
-          )}
-
-          {!scanning && !report && (
-            <div className="empty-state compact-empty-state">
-              <strong>Ready to scan</strong>
-              <span>Unknown folders are shown for information only and are never cleaned automatically.</span>
+            <div className="simple-progress-numbers">
+              <strong>{progressValue}%</strong>
+              <span>{formatBytes(progress?.discoveredBytes ?? 0)} found so far</span>
             </div>
-          )}
+            <button className="button button-secondary" onClick={onCancel}>Stop scan</button>
+          </div>
+        )}
 
-          {error && <p className="error-banner">{error}</p>}
-        </section>
+        {!scanning && report && (
+          <div className="simple-scan-result">
+            <span className="simple-result-check" aria-hidden="true">✓</span>
+            <span className="page-kicker">Scan complete</span>
+            <h2>{formatBytes(cleanableBytes)} can be cleaned</h2>
+            <p>
+              {cleanableItems} item{cleanableItems === 1 ? " is" : "s are"} ready for review.
+              {reviewOnlyItems > 0 ? ` ${reviewOnlyItems} other large folders are shown separately and will not be removed.` : ""}
+            </p>
+            <div className="simple-result-actions">
+              <button className="button button-primary simple-primary-action" onClick={onContinue}>
+                See what is safe to clean
+              </button>
+              <button className="button button-secondary" onClick={() => onStart(options)}>Scan again</button>
+            </div>
+          </div>
+        )}
 
-        <aside className="scan-side-column">
-          <section className="surface scan-config-panel">
-            <span className="surface-label">How thorough?</span>
-            <div className="segmented-control" role="group" aria-label="Scan thoroughness">
-              {profiles.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={profile === item ? "is-active" : ""}
-                  disabled={scanning}
-                  onClick={() => selectProfile(item)}
+        {error && <p className="error-banner">{error}</p>}
+      </section>
+
+      {!scanning && (
+        <details className="surface advanced-scan-settings">
+          <summary>Advanced scan options</summary>
+          <div className="advanced-scan-content">
+            <div>
+              <span className="surface-label">Scan depth</span>
+              <div className="segmented-control" role="group" aria-label="Scan depth">
+                {profiles.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={profile === item ? "is-active" : ""}
+                    onClick={() => selectProfile(item)}
+                  >
+                    {item[0].toUpperCase() + item.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <p className="config-help">{modeCopy[profile]}</p>
+            </div>
+
+            <div className="advanced-option-grid">
+              <label className="config-field">
+                <span>Smallest extra folder to show</span>
+                <select
+                  value={options.minimumFindingBytes}
+                  disabled={ultraLocked}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      minimumFindingBytes: Number(event.target.value)
+                    }))
+                  }
                 >
-                  {item[0].toUpperCase() + item.slice(1)}
-                </button>
-              ))}
-            </div>
-            <p className="config-help">{modeCopy[profile]}</p>
+                  <option value={64 * 1024 * 1024}>64 MB</option>
+                  <option value={256 * 1024 * 1024}>256 MB</option>
+                  <option value={512 * 1024 * 1024}>512 MB</option>
+                  <option value={1024 * 1024 * 1024}>1 GB</option>
+                </select>
+              </label>
 
-            <label className="config-field">
-              <span>Smallest folder to show</span>
-              <select
-                value={options.minimumFindingBytes}
-                disabled={scanning || ultraLocked}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    minimumFindingBytes: Number(event.target.value)
-                  }))
-                }
-              >
-                <option value={64 * 1024 * 1024}>64 MB</option>
-                <option value={256 * 1024 * 1024}>256 MB</option>
-                <option value={512 * 1024 * 1024}>512 MB</option>
-                <option value={1024 * 1024 * 1024}>1 GB</option>
-              </select>
-            </label>
-
-            <label className="config-field">
-              <span>Maximum extra folders to show</span>
-              <select
-                value={options.maxUnknownFindings}
-                disabled={scanning || !options.discoverUnknown || ultraLocked}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    maxUnknownFindings: Number(event.target.value)
-                  }))
-                }
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={40}>40</option>
-                <option value={75}>75</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <div className="scan-toggles">
-              <Toggle
-                label="Known app and tool folders"
-                checked={options.includeKnownTargets}
-                disabled={scanning || ultraLocked}
-                onChange={(value) => setFlag("includeKnownTargets", value)}
-              />
-              <Toggle
-                label="Project build files"
-                checked={options.includeProjectOutputs}
-                disabled={scanning || ultraLocked}
-                onChange={(value) => setFlag("includeProjectOutputs", value)}
-              />
-              <Toggle
-                label="Find other large folders"
-                checked={options.discoverUnknown}
-                disabled={scanning || ultraLocked}
-                onChange={(value) => setFlag("discoverUnknown", value)}
-              />
-              <Toggle
-                label="Look inside app data"
-                checked={options.includeAppData}
-                disabled={scanning || !options.discoverUnknown || ultraLocked}
-                onChange={(value) => setFlag("includeAppData", value)}
-              />
-              <Toggle
-                label="Check Windows cache folders"
-                checked={options.includeSystemDriveCaches}
-                disabled={scanning || ultraLocked}
-                onChange={(value) => setFlag("includeSystemDriveCaches", value)}
-              />
+              <label className="config-field">
+                <span>Maximum extra folders</span>
+                <select
+                  value={options.maxUnknownFindings}
+                  disabled={!options.discoverUnknown || ultraLocked}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      maxUnknownFindings: Number(event.target.value)
+                    }))
+                  }
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={40}>40</option>
+                  <option value={75}>75</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
             </div>
-          </section>
 
-          <section className="surface compact-surface protection-panel">
-            <span className="surface-label">Safety</span>
-            <div className="info-row">
-              <ShieldIcon />
-              <div>
-                <strong>Unknown folders are not cleaned</strong>
-                <span>Only locations with a verified cleanup rule can be selected.</span>
-              </div>
+            <div className="scan-toggles advanced-toggle-grid">
+              <Toggle label="Known temporary and cache folders" checked={options.includeKnownTargets} disabled={ultraLocked} onChange={(value) => setFlag("includeKnownTargets", value)} />
+              <Toggle label="Project build files" checked={options.includeProjectOutputs} disabled={ultraLocked} onChange={(value) => setFlag("includeProjectOutputs", value)} />
+              <Toggle label="Other large folders" checked={options.discoverUnknown} disabled={ultraLocked} onChange={(value) => setFlag("discoverUnknown", value)} />
+              <Toggle label="App data" checked={options.includeAppData} disabled={!options.discoverUnknown || ultraLocked} onChange={(value) => setFlag("includeAppData", value)} />
+              <Toggle label="Windows cache folders" checked={options.includeSystemDriveCaches} disabled={ultraLocked} onChange={(value) => setFlag("includeSystemDriveCaches", value)} />
             </div>
-            <div className="info-row">
-              <span className="info-glyph">01</span>
-              <div>
-                <strong>Everything stays on this PC</strong>
-                <span>Folder paths and project names are not uploaded.</span>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
+          </div>
+        </details>
+      )}
+
+      <section className="simple-safety-strip">
+        <ShieldIcon />
+        <div>
+          <strong>Designed to avoid important files</strong>
+          <span>Unknown folders, browser profiles, local AI models and project source are never automatically selected.</span>
+        </div>
+      </section>
     </section>
   );
 }
