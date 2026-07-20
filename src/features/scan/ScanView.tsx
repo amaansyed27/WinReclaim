@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ScanIcon, ShieldIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
+import { loadPreferences } from "../../lib/settings";
 import type { ScanMode, ScanOptions, ScanProgress, ScanReport } from "../../types";
 
 interface ScanViewProps {
@@ -83,8 +84,9 @@ export function ScanView({
   onCancel,
   onContinue
 }: ScanViewProps) {
-  const [profile, setProfile] = useState<ScanProfile>("balanced");
-  const [options, setOptions] = useState<ScanOptions>({ ...profileOptions.balanced });
+  const initialProfile = loadPreferences().defaultScanProfile;
+  const [profile, setProfile] = useState<ScanProfile>(initialProfile);
+  const [options, setOptions] = useState<ScanOptions>({ ...profileOptions[initialProfile] });
 
   const progressValue = progress?.totalTargets
     ? Math.round((progress.completedTargets / progress.totalTargets) * 100)
@@ -124,7 +126,7 @@ export function ScanView({
             <button className="button button-primary simple-primary-action" onClick={() => onStart(options)}>
               Scan my PC
             </button>
-            <span className="simple-action-note">Recommended scan selected · usually no setup needed</span>
+            <span className="simple-action-note">{profile[0].toUpperCase() + profile.slice(1)} scan selected · change it in Settings</span>
           </div>
         )}
 
