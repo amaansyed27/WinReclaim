@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub const RULE_SET_VERSION: &str = "2026.07-alpha.2";
+pub const RULE_SET_VERSION: &str = "2026.07-alpha.3";
 
 type RuleIdentity = (&'static str, &'static str, &'static str);
 
@@ -74,10 +74,10 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
         target(
             ("system_drive.prefetch", "Windows Prefetch", "Classic Windows cleanup"),
             windows.join("Prefetch"),
-            RiskClass::ReviewFirst,
+            RiskClass::Protected,
             "Windows launch traces used to optimise application and boot startup.",
-            "Only .pf files are removed after explicit review. Windows rebuilds them, and launches may be temporarily slower. Administrator rights may be required.",
-            Some(ActionKind::Prefetch),
+            "Protected. WinReclaim reports its size for context but never deletes Prefetch data.",
+            None,
         ),
         target(
             ("system_drive.recycle_bin", "Recycle Bin", "Classic Windows cleanup"),
