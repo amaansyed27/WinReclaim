@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          cargo fmt --all > rustfmt.log 2>&1
+          cargo fmt --manifest-path src-tauri/Cargo.toml > rustfmt.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
