@@ -1,9 +1,7 @@
 name: Rustfmt diagnostic
 
 on:
-  push:
-    branches:
-      - aggressive-temp-and-cache-actions
+  pull_request:
 
 permissions:
   contents: read
