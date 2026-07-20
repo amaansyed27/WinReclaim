@@ -25,10 +25,10 @@ type ScanProfile = ScanMode | "ultra";
 const profiles: ScanProfile[] = ["quick", "balanced", "deep", "ultra"];
 
 const modeCopy: Record<ScanProfile, string> = {
-  quick: "Known locations and a bounded discovery pass.",
-  balanced: "Broader project and unclassified directory discovery.",
-  deep: "Largest bounded scan for heavily nested workspaces.",
-  ultra: "Runs every scan source using Deep traversal, AppData and Windows-drive cache discovery, and maximum result coverage."
+  quick: "Checks the most common places. Fastest.",
+  balanced: "Checks common places and project folders. Best for most people.",
+  deep: "Looks through more folders. Finds more, but takes longer.",
+  ultra: "Checks every supported location with the broadest search. Slowest."
 };
 
 const defaultOptions: ScanOptions = {
@@ -89,9 +89,9 @@ export function ScanView({
     <section className="page scan-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Storage</span>
-          <h1>Scan</h1>
-          <p>Inspect verified locations and discover large unclassified directories.</p>
+          <span className="page-kicker">Find space to free</span>
+          <h1>Scan your PC</h1>
+          <p>WinReclaim only looks for files. Nothing is removed until you review and confirm.</p>
         </div>
         <span className={`status-chip ${scanning ? "is-running" : report ? "is-ready" : ""}`}>
           {scanning ? "Scanning" : report ? "Complete" : "Ready"}
@@ -106,9 +106,9 @@ export function ScanView({
                 <ScanIcon />
               </span>
               <div>
-                <h2>Current Windows profile</h2>
+                <h2>This Windows account</h2>
                 <span>
-                  {scanning ? progress?.phase ?? "Starting" : report ? "Latest scan" : "Not scanned"}
+                  {scanning ? progress?.phase ?? "Starting" : report ? "Latest scan" : "Not scanned yet"}
                 </span>
               </div>
             </div>
@@ -118,7 +118,7 @@ export function ScanView({
               </button>
             ) : (
               <button className="button button-secondary" onClick={onCancel}>
-                Cancel
+                Stop scan
               </button>
             )}
           </div>
@@ -131,18 +131,18 @@ export function ScanView({
                   <strong>{progressValue}%</strong>
                 </div>
                 <div>
-                  <span>Identified</span>
+                  <span>Space found</span>
                   <strong>{formatBytes(progress?.discoveredBytes ?? 0)}</strong>
                 </div>
                 <div>
-                  <span>Entries</span>
+                  <span>Files checked</span>
                   <strong>{(progress?.scannedEntries ?? 0).toLocaleString()}</strong>
                 </div>
               </div>
               <div className="progress-track">
                 <span style={{ width: `${Math.max(3, progressValue)}%` }} />
               </div>
-              <p className="path-line">{progress?.currentPath ?? "Preparing storage targets"}</p>
+              <p className="path-line">{progress?.currentPath ?? "Preparing folders"}</p>
             </div>
           )}
 
@@ -150,7 +150,7 @@ export function ScanView({
             <>
               <div className="disk-overview">
                 <div className="disk-copy">
-                  <span>Disk usage</span>
+                  <span>Space currently used</span>
                   <strong>{formatBytes(report.disk.usedBytes)}</strong>
                   <small>of {formatBytes(report.disk.totalBytes)}</small>
                 </div>
@@ -165,14 +165,14 @@ export function ScanView({
                   <div className="disk-meter-labels">
                     <span>{formatBytes(report.disk.freeBytes)} free</span>
                     <span>
-                      {report.findings.length} findings · {unknownCount} dynamic
+                      {report.findings.length} items found · {unknownCount} extra folders
                     </span>
                   </div>
                 </div>
               </div>
               <div className="scan-result-actions">
                 <button className="button button-primary" onClick={onContinue}>
-                  Open findings
+                  Review what was found
                 </button>
               </div>
             </>
@@ -180,8 +180,8 @@ export function ScanView({
 
           {!scanning && !report && (
             <div className="empty-state compact-empty-state">
-              <strong>Ready for discovery</strong>
-              <span>Scanning is read-only. Unknown directories are inspection-only.</span>
+              <strong>Ready to scan</strong>
+              <span>Unknown folders are shown for information only and are never cleaned automatically.</span>
             </div>
           )}
 
@@ -190,8 +190,8 @@ export function ScanView({
 
         <aside className="scan-side-column">
           <section className="surface scan-config-panel">
-            <span className="surface-label">Scan profile</span>
-            <div className="segmented-control" role="group" aria-label="Scan depth">
+            <span className="surface-label">How thorough?</span>
+            <div className="segmented-control" role="group" aria-label="Scan thoroughness">
               {profiles.map((item) => (
                 <button
                   key={item}
@@ -207,7 +207,7 @@ export function ScanView({
             <p className="config-help">{modeCopy[profile]}</p>
 
             <label className="config-field">
-              <span>Minimum finding size</span>
+              <span>Smallest folder to show</span>
               <select
                 value={options.minimumFindingBytes}
                 disabled={scanning || ultraLocked}
@@ -226,7 +226,7 @@ export function ScanView({
             </label>
 
             <label className="config-field">
-              <span>Maximum dynamic findings</span>
+              <span>Maximum extra folders to show</span>
               <select
                 value={options.maxUnknownFindings}
                 disabled={scanning || !options.discoverUnknown || ultraLocked}
@@ -247,31 +247,31 @@ export function ScanView({
 
             <div className="scan-toggles">
               <Toggle
-                label="Verified tool locations"
+                label="Known app and tool folders"
                 checked={options.includeKnownTargets}
                 disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("includeKnownTargets", value)}
               />
               <Toggle
-                label="Project build output"
+                label="Project build files"
                 checked={options.includeProjectOutputs}
                 disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("includeProjectOutputs", value)}
               />
               <Toggle
-                label="Discover unknown large folders"
+                label="Find other large folders"
                 checked={options.discoverUnknown}
                 disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("discoverUnknown", value)}
               />
               <Toggle
-                label="Include AppData discovery"
+                label="Look inside app data"
                 checked={options.includeAppData}
                 disabled={scanning || !options.discoverUnknown || ultraLocked}
                 onChange={(value) => setFlag("includeAppData", value)}
               />
               <Toggle
-                label="Check Windows-drive caches"
+                label="Check Windows cache folders"
                 checked={options.includeSystemDriveCaches}
                 disabled={scanning || ultraLocked}
                 onChange={(value) => setFlag("includeSystemDriveCaches", value)}
@@ -280,19 +280,19 @@ export function ScanView({
           </section>
 
           <section className="surface compact-surface protection-panel">
-            <span className="surface-label">Protection</span>
+            <span className="surface-label">Safety</span>
             <div className="info-row">
               <ShieldIcon />
               <div>
-                <strong>Read-only discovery</strong>
-                <span>Unknown system-drive caches stay inspection-only; only exact verified roots receive actions.</span>
+                <strong>Unknown folders are not cleaned</strong>
+                <span>Only locations with a verified cleanup rule can be selected.</span>
               </div>
             </div>
             <div className="info-row">
               <span className="info-glyph">01</span>
               <div>
-                <strong>Local processing</strong>
-                <span>Paths and project names stay on this PC.</span>
+                <strong>Everything stays on this PC</strong>
+                <span>Folder paths and project names are not uploaded.</span>
               </div>
             </div>
           </section>
