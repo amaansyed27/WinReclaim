@@ -1,13 +1,11 @@
 use crate::domain::{
-    Finding, ReclaimPassport, RecoveryClass, ScanReport, ScanRequest, SnapshotSummary,
-    StorageTimeline, TimelineDelta,
+    Finding, ReclaimPassport, RecoveryClass, ScanReport, SnapshotSummary, StorageTimeline,
+    TimelineDelta,
 };
 use crate::policy::{recovery_class_for_finding, SNAPSHOT_LIMIT, SNAPSHOT_SCHEMA_VERSION};
-use crate::rules::RULE_SET_VERSION;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,12 +37,12 @@ struct SnapshotFinding {
     action_available: bool,
 }
 
-pub fn persist_scan_snapshot(report: &ScanReport, request: &ScanRequest) -> Result<()> {
+pub fn persist_scan_snapshot(report: &ScanReport) -> Result<()> {
     let root = snapshot_root();
     fs::create_dir_all(&root)?;
     let snapshot = SnapshotRecord {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
-        scope_fingerprint: scan_scope_fingerprint(report, request),
+        scope_fingerprint: report.scope_fingerprint.clone(),
         id: Uuid::new_v4(),
         scan_id: report.scan_id,
         captured_at: report.completed_at,
@@ -268,26 +266,6 @@ fn modified_at(path: &Path) -> Option<DateTime<Utc>> {
 
 fn finding_key(finding: &Finding) -> String {
     format!("{}|{}", finding.rule_id, finding.path.to_ascii_lowercase())
-}
-
-fn scan_scope_fingerprint(report: &ScanReport, request: &ScanRequest) -> String {
-    let normalized_root = PathBuf::from(&report.root)
-        .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(&report.root))
-        .to_string_lossy()
-        .to_ascii_lowercase();
-    let signature = format!(
-        "{normalized_root}|{:?}|{}|{}|{}|{}|{}|{}|{}|{RULE_SET_VERSION}",
-        request.mode,
-        request.include_known_targets,
-        request.include_project_outputs,
-        request.discover_unknown,
-        request.include_app_data,
-        request.include_system_drive_caches,
-        request.minimum_finding_bytes,
-        request.max_unknown_findings,
-    );
-    hex::encode(Sha256::digest(signature.as_bytes()))
 }
 
 fn signed_delta(current: u64, previous: u64) -> i64 {
