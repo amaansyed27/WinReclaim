@@ -1,4 +1,5 @@
 use crate::actions::execute_item;
+use crate::app_data::{self, AppDataMutation, AppDataSummary, ResetAppRequest};
 use crate::domain::{
     AiStatus, CleanupPlan, CleanupReceipt, CreatePlanRequest, ExecutePlanRequest, IntentRequest,
     IntentSuggestion, ReclaimPassport, RestoreRequest, RestoreResult, ScanReport, ScanRequest,
@@ -216,4 +217,63 @@ pub fn list_vault_entries() -> Result<Vec<VaultEntry>, String> {
 #[tauri::command]
 pub fn restore_vault_entry(request: RestoreRequest) -> Result<RestoreResult, String> {
     restore_entry(request.vault_entry_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_app_data_summary() -> Result<AppDataSummary, String> {
+    app_data::summary().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn clear_scan_history(state: State<'_, AppState>) -> Result<AppDataMutation, String> {
+    let mutation = app_data::clear_scan_history().map_err(|error| error.to_string())?;
+    *state
+        .latest_scan
+        .lock()
+        .map_err(|_| "Scan state is unavailable".to_string())? = None;
+    state
+        .plans
+        .lock()
+        .map_err(|_| "Plan storage is unavailable".to_string())?
+        .clear();
+    Ok(mutation)
+}
+
+#[tauri::command]
+pub fn clear_cleanup_records(state: State<'_, AppState>) -> Result<AppDataMutation, String> {
+    let mutation = app_data::clear_cleanup_records().map_err(|error| error.to_string())?;
+    state
+        .receipts
+        .lock()
+        .map_err(|_| "Receipt storage is unavailable".to_string())?
+        .clear();
+    Ok(mutation)
+}
+
+#[tauri::command]
+pub fn reset_app_data(
+    state: State<'_, AppState>,
+    request: ResetAppRequest,
+) -> Result<AppDataMutation, String> {
+    state.cancel_scan.store(true, Ordering::Relaxed);
+    let result = app_data::reset(&request).map_err(|error| error.to_string());
+    state.cancel_scan.store(false, Ordering::Relaxed);
+    let mutation = result?;
+
+    *state
+        .latest_scan
+        .lock()
+        .map_err(|_| "Scan state is unavailable".to_string())? = None;
+    state
+        .plans
+        .lock()
+        .map_err(|_| "Plan storage is unavailable".to_string())?
+        .clear();
+    state
+        .receipts
+        .lock()
+        .map_err(|_| "Receipt storage is unavailable".to_string())?
+        .clear();
+
+    Ok(mutation)
 }
