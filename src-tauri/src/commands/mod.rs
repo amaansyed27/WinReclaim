@@ -26,7 +26,6 @@ pub async fn start_scan(
 ) -> Result<ScanReport, String> {
     let app_state = state.inner().clone();
     let scan_state = app_state.clone();
-    let snapshot_request = request.clone();
 
     let mut result =
         tauri::async_runtime::spawn_blocking(move || scan_profile(&app, &scan_state, request))
@@ -34,7 +33,7 @@ pub async fn start_scan(
             .map_err(|error| format!("Scan task failed: {error}"))?
             .map_err(|error| error.to_string())?;
 
-    if let Err(error) = persist_scan_snapshot(&result, &snapshot_request) {
+    if let Err(error) = persist_scan_snapshot(&result) {
         result.errors.push(format!(
             "Storage timeline snapshot could not be saved: {error}"
         ));
@@ -202,9 +201,9 @@ pub fn get_reclaim_passports(
         .lock()
         .map_err(|_| "Scan state is unavailable".to_string())?
         .clone()
-        .ok_or_else(|| "Run a scan before requesting reclaim passports".to_string())?;
+        .ok_or_else(|| "Run a scan before requesting item details".to_string())?;
     if report.scan_id != scan_id {
-        return Err("The requested passport scan is no longer current".to_string());
+        return Err("The requested scan is no longer current".to_string());
     }
     Ok(build_reclaim_passports(&report))
 }
