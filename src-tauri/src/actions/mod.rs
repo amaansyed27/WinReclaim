@@ -77,9 +77,7 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
     }
 }
 
-fn map_filesystem_outcome(
-    outcome: filesystem::FilesystemOutcome,
-) -> (u64, u64, String, Vec<Uuid>) {
+fn map_filesystem_outcome(outcome: filesystem::FilesystemOutcome) -> (u64, u64, String, Vec<Uuid>) {
     (
         outcome.affected_entries,
         outcome.skipped_entries,

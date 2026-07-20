@@ -382,7 +382,13 @@ fn discover_project_outputs(
 fn project_output_descriptor(
     path: &Path,
     name: &str,
-) -> Option<(&'static str, &'static str, &'static str, &'static str, RiskClass)> {
+) -> Option<(
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    RiskClass,
+)> {
     let parent = path.parent().unwrap_or(path);
     match name {
         "node_modules"
@@ -396,13 +402,16 @@ fn project_output_descriptor(
                     "bun.lock",
                     "bun.lockb",
                 ],
-            ) => Some((
+            ) =>
+        {
+            Some((
                 "project.node_modules",
                 "Project node_modules",
                 "JavaScript project dependencies",
                 "Dependencies must be installed again from the project manifest or lockfile.",
                 RiskClass::RebuildOrRedownload,
-            )),
+            ))
+        }
         "target" if parent.join("Cargo.toml").is_file() => Some((
             "project.rust_target",
             "Rust target directory",
@@ -417,14 +426,15 @@ fn project_output_descriptor(
             "The environment must be recreated and dependencies reinstalled.",
             RiskClass::RebuildOrRedownload,
         )),
-        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage"
-            if has_project_marker(parent) => Some((
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" if has_project_marker(parent) => {
+            Some((
                 "project.build_output",
                 "Project build output",
                 "Generated project output",
                 "The next project build should recreate this directory.",
                 RiskClass::ReviewFirst,
-            )),
+            ))
+        }
         _ => None,
     }
 }

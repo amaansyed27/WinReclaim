@@ -109,7 +109,9 @@ fn validate_generic_target(target: &Path) -> Result<()> {
     }
     let metadata = fs::symlink_metadata(target)?;
     if !metadata.is_dir() || is_reparse_point(&metadata) {
-        return Err(anyhow!("Generic cleanup targets must be normal directories"));
+        return Err(anyhow!(
+            "Generic cleanup targets must be normal directories"
+        ));
     }
 
     if is_known_generic_target(target)?
@@ -158,9 +160,7 @@ fn is_verified_project_output(target: &Path) -> Result<bool> {
         ),
         "target" => parent.join("Cargo.toml").is_file(),
         ".venv" | "venv" => target.join("pyvenv.cfg").is_file(),
-        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" => {
-            has_project_marker(parent)
-        }
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" => has_project_marker(parent),
         _ => false,
     };
     Ok(valid)
@@ -220,7 +220,11 @@ fn is_cache_like_name(name: &str) -> bool {
 fn has_protected_component(path: &Path) -> bool {
     path.components().any(|component| {
         matches!(
-            component.as_os_str().to_string_lossy().to_ascii_lowercase().as_str(),
+            component
+                .as_os_str()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .as_str(),
             ".git"
                 | ".hg"
                 | ".svn"
@@ -266,11 +270,7 @@ fn paths_equal(left: &Path, right: &Path) -> bool {
         _ => left
             .to_string_lossy()
             .trim_end_matches(['\\', '/'])
-            .eq_ignore_ascii_case(
-                right
-                    .to_string_lossy()
-                    .trim_end_matches(['\\', '/']),
-            ),
+            .eq_ignore_ascii_case(right.to_string_lossy().trim_end_matches(['\\', '/'])),
     }
 }
 
@@ -461,7 +461,13 @@ mod tests {
 
     #[test]
     fn recognises_portable_cache_names() {
-        for name in ["Cache", "ComputeCache", "shader-cache", "node-compile-cache", "tmp"] {
+        for name in [
+            "Cache",
+            "ComputeCache",
+            "shader-cache",
+            "node-compile-cache",
+            "tmp",
+        ] {
             assert!(is_cache_like_name(name));
         }
         for name in ["models", "User Data", "Documents", "plugins"] {
