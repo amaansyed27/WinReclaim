@@ -39,10 +39,31 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Check Rust
-        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+        shell: pwsh
+        run: |
+          cargo check --manifest-path src-tauri/Cargo.toml --all-targets 2>&1 | Tee-Object -FilePath cargo-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test Rust
-        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+        shell: pwsh
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --all-targets 2>&1 | Tee-Object -FilePath cargo-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        shell: pwsh
+        run: |
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings 2>&1 | Tee-Object -FilePath cargo-clippy.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload validation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-diagnostics
+          path: |
+            cargo-check.log
+            cargo-test.log
+            cargo-clippy.log
+          if-no-files-found: ignore
+          retention-days: 7
