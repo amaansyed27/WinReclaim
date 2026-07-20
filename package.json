@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run check:copy && tsc && vite build",
+    "build": "npm run check:integrity && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "check": "npm run check:copy && tsc --noEmit",
-    "check:copy": "node scripts/check-generic-copy.mjs",
+    "check": "npm run check:integrity && tsc --noEmit",
+    "check:integrity": "node scripts/check-generic-copy.mjs",
     "version:set": "node scripts/set-version.mjs"
   },
   "dependencies": {
