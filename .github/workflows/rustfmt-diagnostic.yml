@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   rustfmt:
@@ -18,9 +19,31 @@ jobs:
         with:
           components: rustfmt
       - name: Apply rustfmt
+        id: format
         shell: bash
-        run: cargo fmt --all
+        run: |
+          set +e
+          cargo fmt --all > rustfmt.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Report parser errors
+        if: steps.format.outputs.status != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo 'Rustfmt could not parse the branch:'
+            echo
+            echo '```text'
+            cat rustfmt.log
+            echo '```'
+          } > rustfmt-comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file rustfmt-comment.md
+          exit 1
       - name: Commit formatting
+        if: steps.format.outputs.status == '0'
         shell: bash
         run: |
           if git diff --quiet; then
