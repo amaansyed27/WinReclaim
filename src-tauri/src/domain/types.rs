@@ -24,7 +24,6 @@ pub enum Confidence {
 pub enum ActionKind {
     UserTemp,
     SystemTemp,
-    Prefetch,
     RecycleBin,
     CrashDumps,
     HuggingfacePrune,
@@ -88,6 +87,7 @@ pub struct ScanReport {
     pub started_at: DateTime<Utc>,
     pub completed_at: DateTime<Utc>,
     pub root: String,
+    pub scope_fingerprint: String,
     pub disk: DiskSnapshot,
     pub findings: Vec<Finding>,
     pub scanned_entries: u64,
@@ -113,11 +113,11 @@ pub struct ScanRequest {
     pub mode: ScanMode,
     #[serde(default = "default_true")]
     pub include_known_targets: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub include_project_outputs: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub discover_unknown: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub include_app_data: bool,
     #[serde(default = "default_true")]
     pub include_system_drive_caches: bool,
@@ -133,9 +133,9 @@ impl Default for ScanRequest {
             root: None,
             mode: ScanMode::Balanced,
             include_known_targets: true,
-            include_project_outputs: true,
-            discover_unknown: true,
-            include_app_data: true,
+            include_project_outputs: false,
+            discover_unknown: false,
+            include_app_data: false,
             include_system_drive_caches: true,
             minimum_finding_bytes: default_minimum_finding_bytes(),
             max_unknown_findings: default_max_unknown_findings(),
@@ -148,7 +148,7 @@ fn default_true() -> bool {
 }
 
 fn default_minimum_finding_bytes() -> u64 {
-    256 * 1024 * 1024
+    512 * 1024 * 1024
 }
 
 fn default_max_unknown_findings() -> usize {
@@ -213,9 +213,7 @@ pub struct PlanSimulation {
     pub redownloadable_bytes: u64,
     pub rebuildable_bytes: u64,
     pub irreversible_bytes: u64,
-    pub estimated_recovery_minutes: u32,
     pub affected_items: usize,
-    pub protected_items_touched: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,7 +270,6 @@ pub struct CleanupReceipt {
     pub results: Vec<ActionResult>,
     #[serde(default)]
     pub vault_entry_ids: Vec<Uuid>,
-    pub protected_summary: Vec<String>,
     pub rule_set_version: String,
 }
 
@@ -280,14 +277,10 @@ pub struct CleanupReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ReclaimPassport {
     pub finding_id: Uuid,
-    pub owner: String,
     pub last_changed_at: Option<DateTime<Utc>>,
     pub recovery_class: RecoveryClass,
     pub recovery_method: String,
-    pub estimated_recovery_minutes: Option<u32>,
-    pub confidence_score: u8,
     pub activity_note: String,
-    pub evidence: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,8 +291,6 @@ pub struct SnapshotSummary {
     pub captured_at: DateTime<Utc>,
     pub used_bytes: u64,
     pub free_bytes: u64,
-    pub classified_bytes: u64,
-    pub finding_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -309,12 +300,10 @@ pub struct TimelineDelta {
     pub display_name: String,
     pub category: String,
     pub path: String,
-    pub owner: String,
     pub previous_bytes: u64,
     pub current_bytes: u64,
     pub delta_bytes: i64,
-    pub confidence_score: u8,
-    pub recovery_class: RecoveryClass,
+    pub action_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -322,8 +311,8 @@ pub struct TimelineDelta {
 pub struct StorageTimeline {
     pub snapshots: Vec<SnapshotSummary>,
     pub deltas: Vec<TimelineDelta>,
-    pub total_growth_bytes: i64,
-    pub reclaimable_growth_bytes: u64,
+    pub total_growth_bytes: Option<i64>,
+    pub compared_with_at: Option<DateTime<Utc>>,
     pub baseline_available: bool,
 }
 
