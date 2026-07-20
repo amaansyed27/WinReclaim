@@ -4,6 +4,18 @@ Rules describe storage; they do not delete it.
 
 A rule provides a stable ID, product name, recognised path, safety classification, explanation, consequence, confidence and optional reference to a compiled action adapter.
 
+## Generic product shell
+
+The main WinReclaim interface must remain useful to any Windows user. It must not advertise one developer's username, projects, installed tools or folder layout.
+
+Specific application names are allowed only when:
+
+- a detection rule has found that application or storage location on the current PC
+- the name is shown as part of that finding, its explanation or its cleanup consequence
+- the corresponding finding disappears when the software or folder is not present
+
+Default scans focus on common cleanup locations. Project output, broad AppData discovery and unknown large-folder analysis are enabled only by deeper scan profiles or explicit advanced options.
+
 ## Safety precedence
 
 `protected` always overrides every less restrictive classification. Protected findings cannot expose an executable action even if a programmer accidentally attaches an action kind.
