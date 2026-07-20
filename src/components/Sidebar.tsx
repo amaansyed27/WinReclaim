@@ -6,6 +6,7 @@ interface SidebarProps {
   current: AppStep;
   available: Set<AppStep>;
   scanning: boolean;
+  automaticUpdateChecks: boolean;
   onNavigate: (step: AppStep) => void;
 }
 
@@ -24,10 +25,21 @@ const items: { id: AppStep; label: string; icon: ReactNode }[] = [
     id: "vault",
     label: "Restore files",
     icon: <><path d="M4 7h13v10H4zM6 7V5h9v2" /><path d="M8 11h5M10.5 11v3" /></>
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <><circle cx="10.5" cy="10.5" r="2.6" /><path d="M10.5 2.8v2M10.5 16.2v2M2.8 10.5h2M16.2 10.5h2M5.1 5.1l1.4 1.4M14.5 14.5l1.4 1.4M15.9 5.1l-1.4 1.4M6.5 14.5l-1.4 1.4" /></>
   }
 ];
 
-export function Sidebar({ current, available, scanning, onNavigate }: SidebarProps) {
+export function Sidebar({
+  current,
+  available,
+  scanning,
+  automaticUpdateChecks,
+  onNavigate
+}: SidebarProps) {
   const activeItem: AppStep = ["findings", "plan", "receipt"].includes(current) ? "scan" : current;
 
   return (
@@ -72,7 +84,7 @@ export function Sidebar({ current, available, scanning, onNavigate }: SidebarPro
             <span>Scanning and cleanup happen on this PC</span>
           </div>
         </div>
-        <UpdateControl />
+        <UpdateControl automaticCheck={automaticUpdateChecks} />
       </div>
     </aside>
   );
