@@ -1,8 +1,9 @@
 mod external;
 mod filesystem;
 
-use crate::domain::{ActionKind, ActionResult, CleanupPlanItem, RecoveryClass};
+use crate::domain::{ActionKind, ActionResult, CleanupPlanItem};
 use crate::platform::windows::empty_recycle_bin;
+use crate::policy::recovery_class_for_action;
 use crate::scanner::{directory_size, recycle_bin_size};
 use anyhow::Result;
 use std::path::Path;
@@ -13,7 +14,7 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
     let target = Path::new(&item.path);
     let cancel = AtomicBool::new(false);
     let measured_before = measure_target(item.action_kind, target, &cancel);
-    let recovery_class = recovery_class(item.action_kind);
+    let recovery_class = recovery_class_for_action(item.action_kind);
 
     let outcome: Result<(u64, u64, String, Vec<Uuid>)> = match item.action_kind {
         ActionKind::UserTemp => filesystem::quarantine_user_temp(
@@ -31,14 +32,6 @@ pub fn execute_item(item: &CleanupPlanItem, receipt_id: Uuid) -> ActionResult {
             )
         }),
         ActionKind::SystemTemp => filesystem::clean_system_temp(target).map(|outcome| {
-            (
-                outcome.affected_entries,
-                outcome.skipped_entries,
-                outcome.message,
-                outcome.vault_entry_ids,
-            )
-        }),
-        ActionKind::Prefetch => filesystem::clean_prefetch(target).map(|outcome| {
             (
                 outcome.affected_entries,
                 outcome.skipped_entries,
@@ -111,16 +104,5 @@ fn measure_target(action: ActionKind, target: &Path, cancel: &AtomicBool) -> u64
     match action {
         ActionKind::RecycleBin => recycle_bin_size().bytes,
         _ => directory_size(target, cancel).bytes,
-    }
-}
-
-fn recovery_class(action: ActionKind) -> RecoveryClass {
-    match action {
-        ActionKind::UserTemp | ActionKind::CrashDumps => RecoveryClass::Reversible,
-        ActionKind::Prefetch => RecoveryClass::Rebuildable,
-        ActionKind::HuggingfacePrune | ActionKind::NpmCache => RecoveryClass::Redownloadable,
-        ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune => {
-            RecoveryClass::Irreversible
-        }
     }
 }
