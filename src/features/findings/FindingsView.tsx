@@ -1,14 +1,15 @@
 import { ArrowIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
+import { riskCopy } from "../../lib/plainLanguage";
 import type { AiStatus, Finding, ReclaimPassport, RiskClass, ScanReport } from "../../types";
 import { FindingRow } from "./FindingRow";
 import { IntentPlanner } from "./IntentPlanner";
 
-const groups: { id: RiskClass; title: string; note: string }[] = [
-  { id: "safe_now", title: "Safe now", note: "Disposable data with narrow cleanup rules." },
-  { id: "rebuild_or_redownload", title: "Rebuild later", note: "The owning tool may fetch or rebuild this data." },
-  { id: "review_first", title: "Review first", note: "Environments, containers or project output." },
-  { id: "protected", title: "Protected", note: "Inspection only. Automatic cleanup is disabled." }
+const groupOrder: RiskClass[] = [
+  "safe_now",
+  "rebuild_or_redownload",
+  "review_first",
+  "protected"
 ];
 
 interface FindingsViewProps {
@@ -46,13 +47,13 @@ export function FindingsView({
     <section className="page findings-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Reclaim Passports</span>
-          <h1>Findings</h1>
-          <p>Ownership, activity, recovery cost and confidence are calculated locally for every item.</p>
+          <span className="page-kicker">What WinReclaim found</span>
+          <h1>Choose what to clean</h1>
+          <p>Each item explains what it is, what happens after removal and whether it can be restored.</p>
         </div>
         <div className="header-metrics">
-          <div><span>Classified</span><strong>{formatBytes(totalBytes)}</strong></div>
-          <div><span>Actionable</span><strong>{actionable}</strong></div>
+          <div><span>Space found</span><strong>{formatBytes(totalBytes)}</strong></div>
+          <div><span>Can clean</span><strong>{actionable}</strong></div>
         </div>
       </header>
 
@@ -65,14 +66,15 @@ export function FindingsView({
       />
 
       <div className="finding-groups">
-        {groups.map((group) => {
+        {groupOrder.map((groupId) => {
+          const group = riskCopy[groupId];
           const items = report.findings
-            .filter((finding) => finding.riskClass === group.id)
+            .filter((finding) => finding.riskClass === groupId)
             .sort((a, b) => b.estimatedBytes - a.estimatedBytes);
           if (!items.length) return null;
 
           return (
-            <section className={`finding-group group-${group.id}`} key={group.id}>
+            <section className={`finding-group group-${groupId}`} key={groupId}>
               <div className="finding-group-head">
                 <div>
                   <h2>{group.title}</h2>
@@ -110,7 +112,7 @@ export function FindingsView({
           onClick={onCreatePlan}
           disabled={!selectedIds.size}
         >
-          Simulate plan <ArrowIcon />
+          Review cleanup <ArrowIcon />
         </button>
       </footer>
     </section>
