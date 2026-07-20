@@ -16,7 +16,15 @@ type UpdatePhase =
   | "up_to_date"
   | "error";
 
-export function UpdateControl() {
+interface UpdateControlProps {
+  automaticCheck?: boolean;
+  variant?: "compact" | "settings";
+}
+
+export function UpdateControl({
+  automaticCheck = true,
+  variant = "compact"
+}: UpdateControlProps) {
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [currentVersion, setCurrentVersion] = useState("1.0.0");
   const [available, setAvailable] = useState<AvailableUpdate | null>(null);
@@ -26,12 +34,13 @@ export function UpdateControl() {
   useEffect(() => {
     currentAppVersion().then(setCurrentVersion).catch(() => undefined);
 
+    if (!automaticCheck) return undefined;
     const timer = window.setTimeout(() => {
       void runCheck(false);
     }, 3_000);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [automaticCheck]);
 
   async function runCheck(manual: boolean) {
     if (phase === "checking" || phase === "downloading") return;
@@ -82,13 +91,17 @@ export function UpdateControl() {
       return progress?.percent == null ? "Updating…" : `Updating ${progress.percent}%`;
     }
     if (phase === "available" && available) return `Update v${available.version}`;
-    return `v${currentVersion}`;
-  }, [available, currentVersion, phase, progress]);
+    return variant === "settings" ? `Check for updates · v${currentVersion}` : `v${currentVersion}`;
+  }, [available, currentVersion, phase, progress, variant]);
 
-  const expanded = phase === "available" || phase === "downloading" || phase === "error" || phase === "up_to_date";
+  const expanded =
+    phase === "available" ||
+    phase === "downloading" ||
+    phase === "error" ||
+    phase === "up_to_date";
 
   return (
-    <div className={`update-control ${expanded ? "is-expanded" : ""}`}>
+    <div className={`update-control update-control-${variant} ${expanded ? "is-expanded" : ""}`}>
       <button
         className={`update-trigger ${phase === "available" ? "has-update" : ""}`}
         type="button"
@@ -97,7 +110,11 @@ export function UpdateControl() {
           if (phase === "available") void installUpdate();
           else void runCheck(true);
         }}
-        aria-label={phase === "available" ? `Install WinReclaim ${available?.version}` : "Check for WinReclaim updates"}
+        aria-label={
+          phase === "available"
+            ? `Install WinReclaim ${available?.version}`
+            : "Check for WinReclaim updates"
+        }
       >
         <span className="update-dot" aria-hidden="true" />
         {buttonLabel}
@@ -124,13 +141,15 @@ export function UpdateControl() {
                   <span style={{ width: `${progress?.percent ?? 8}%` }} />
                 </div>
               )}
-              <small>The package is verified against WinReclaim's embedded updater key before installation.</small>
+              <small>The package is verified against WinReclaim&apos;s embedded updater key before installation.</small>
             </>
           ) : (
             <>
-              <strong>{phase === "error" ? "Update check failed" : "You're up to date"}</strong>
+              <strong>{phase === "error" ? "Update check failed" : "You&apos;re up to date"}</strong>
               {message && <p>{message}</p>}
-              <button className="update-dismiss" type="button" onClick={() => setPhase("idle")}>Dismiss</button>
+              <button className="update-dismiss" type="button" onClick={() => setPhase("idle")}>
+                Dismiss
+              </button>
             </>
           )}
         </div>

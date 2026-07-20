@@ -1,0 +1,76 @@
+.settings-view { max-width: 960px; }
+.settings-section { margin-top: 16px; padding: 20px; border-radius: 10px; }
+.settings-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.settings-section-head h2 { margin: 5px 0 0; color: var(--text); font-size: 20px; }
+.settings-section-head p { margin: 6px 0 0; max-width: 620px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.settings-data-head { align-items: center; }
+
+.settings-field,
+.settings-toggle-row,
+.settings-action-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-field > span,
+.settings-toggle-row > span,
+.settings-action-list > div > span { min-width: 0; }
+.settings-field strong,
+.settings-field small,
+.settings-toggle-row strong,
+.settings-toggle-row small,
+.settings-action-list strong,
+.settings-action-list small { display: block; }
+.settings-field strong,
+.settings-toggle-row strong,
+.settings-action-list strong { color: var(--text-soft); font-size: 13px; }
+.settings-field small,
+.settings-toggle-row small,
+.settings-action-list small { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.settings-field select { width: min(330px, 46%); min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 5px; background: #0c1d31; color: var(--text-soft); }
+
+.settings-toggle-row { position: relative; cursor: pointer; }
+.settings-toggle-row input { position: absolute; opacity: 0; pointer-events: none; }
+.settings-toggle-row i { position: relative; width: 38px; height: 21px; flex: none; border-radius: 999px; background: rgba(113, 145, 181, 0.22); border: 1px solid var(--line); transition: 150ms ease; }
+.settings-toggle-row i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 13px; height: 13px; border-radius: 50%; background: var(--muted-strong); transition: 150ms ease; }
+.settings-toggle-row input:checked + i { background: rgba(45, 137, 220, 0.7); border-color: rgba(102, 190, 255, 0.45); }
+.settings-toggle-row input:checked + i::after { transform: translateX(17px); background: white; }
+
+.settings-data-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.settings-data-grid > div { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(8, 22, 38, 0.45); }
+.settings-data-grid span,
+.settings-data-grid strong { display: block; }
+.settings-data-grid span { color: var(--muted); font-size: 10px; }
+.settings-data-grid strong { margin-top: 6px; color: var(--text); font-size: 18px; }
+.settings-action-list { margin-top: 4px; }
+.settings-action-list .button { flex: none; }
+.settings-data-path { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.settings-data-path span { display: block; color: var(--muted); font-size: 10px; }
+.settings-data-path code { display: block; margin-top: 5px; color: var(--muted-strong); font-size: 10px; overflow-wrap: anywhere; }
+
+.button-danger { border-color: rgba(255, 116, 116, 0.3); background: rgba(124, 39, 45, 0.75); color: #fff; }
+.button-danger:hover:not(:disabled) { border-color: rgba(255, 150, 150, 0.55); background: rgba(153, 45, 53, 0.88); }
+.settings-danger-zone { border-color: rgba(218, 91, 97, 0.28); }
+.settings-reset-confirmation { margin-top: 18px; padding: 16px; border: 1px solid rgba(218, 91, 97, 0.24); background: rgba(64, 20, 25, 0.24); }
+.settings-toggle-row.is-dangerous { margin-top: 0; padding-top: 0; border-top: 0; }
+.settings-reset-input { display: block; margin-top: 16px; }
+.settings-reset-input span { display: block; color: var(--muted-strong); font-size: 11px; }
+.settings-reset-input input { width: 100%; min-height: 38px; margin-top: 7px; padding: 0 10px; border: 1px solid rgba(218, 91, 97, 0.35); border-radius: 5px; background: #160f17; color: var(--text); letter-spacing: 0.08em; }
+.settings-reset-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.settings-notice,
+.settings-message { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted-strong); background: rgba(9, 23, 40, 0.68); font-size: 11px; }
+
+@media (max-width: 820px) {
+  .settings-section-head,
+  .settings-field,
+  .settings-action-list > div { align-items: flex-start; flex-direction: column; }
+  .settings-field select { width: 100%; }
+  .settings-data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-section-head .button,
+  .settings-action-list .button { width: 100%; }
+}

@@ -47,8 +47,30 @@
 .update-progress span { display: block; height: 100%; min-width: 8%; background: linear-gradient(90deg, #2a83d4, #6bc5ff); transition: width 150ms ease; }
 .update-dismiss { margin-top: 10px; background: #14263e; border-color: var(--line); }
 
+.update-control-settings .update-trigger {
+  min-height: 40px;
+  padding: 0 13px;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.update-control-settings .update-popover {
+  position: static;
+  width: 100%;
+  margin-top: 10px;
+  box-shadow: none;
+  backdrop-filter: none;
+  background: rgba(8, 22, 38, 0.62);
+}
+
+.update-control-settings .update-popover-head span { font-size: 9px; }
+.update-control-settings .update-popover-head strong,
+.update-control-settings .update-popover > strong { font-size: 13px; }
+.update-control-settings .update-popover p { font-size: 11px; }
+.update-control-settings .update-popover small { font-size: 10px; }
+
 @media (max-width: 980px) {
-  .update-trigger { justify-content: center; padding: 0; font-size: 0; }
-  .update-trigger .update-dot { margin: 0; }
-  .update-popover { left: 56px; bottom: 0; width: min(340px, calc(100vw - 90px)); }
+  .update-control-compact .update-trigger { justify-content: center; padding: 0; font-size: 0; }
+  .update-control-compact .update-trigger .update-dot { margin: 0; }
+  .update-control-compact .update-popover { left: 56px; bottom: 0; width: min(340px, calc(100vw - 90px)); }
 }

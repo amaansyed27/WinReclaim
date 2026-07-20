@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { AppDataMutation, AppDataSummary } from "../features/settings/settingsTypes";
 import type {
   AiStatus,
   CleanupPlan,
@@ -72,6 +73,24 @@ export async function listVaultEntries(): Promise<VaultEntry[]> {
 export async function restoreVaultEntry(vaultEntryId: string): Promise<RestoreResult> {
   return invoke<RestoreResult>("restore_vault_entry", {
     request: { vaultEntryId }
+  });
+}
+
+export async function getAppDataSummary(): Promise<AppDataSummary> {
+  return invoke<AppDataSummary>("get_app_data_summary");
+}
+
+export async function clearScanHistory(): Promise<AppDataMutation> {
+  return invoke<AppDataMutation>("clear_scan_history");
+}
+
+export async function clearCleanupRecords(): Promise<AppDataMutation> {
+  return invoke<AppDataMutation>("clear_cleanup_records");
+}
+
+export async function resetAppData(includeRestoreFiles: boolean): Promise<AppDataMutation> {
+  return invoke<AppDataMutation>("reset_app_data", {
+    request: { includeRestoreFiles }
   });
 }
 

@@ -9,6 +9,7 @@ const genericUiFiles = [
   "src/features/plan/PlanView.tsx",
   "src/features/scan/ScanView.tsx",
   "src/features/receipt/ReceiptView.tsx",
+  "src/features/settings/SettingsView.tsx",
   "src/features/timeline/TimelineView.tsx",
   "src/features/vault/VaultView.tsx"
 ];
@@ -89,6 +90,23 @@ const timelineBackend = readFileSync("src-tauri/src/insights/mod.rs", "utf8");
 for (const required of ["scope_fingerprint", "compared_with_at", "total_growth_bytes: None"]) {
   if (!timelineBackend.includes(required)) {
     violations.push(`src-tauri/src/insights/mod.rs: missing history safeguard "${required}"`);
+  }
+}
+
+const appDataBackend = readFileSync("src-tauri/src/app_data.rs", "utf8");
+for (const required of ["DATA_GENERATION", "clear_scan_history", "clear_cleanup_records", "include_restore_files"]) {
+  if (!appDataBackend.includes(required)) {
+    violations.push(`src-tauri/src/app_data.rs: missing reset safeguard "${required}"`);
+  }
+}
+if (!appDataBackend.includes("if !request.include_restore_files")) {
+  violations.push("src-tauri/src/app_data.rs: factory reset no longer preserves Restore files by default");
+}
+
+const commandBackend = readFileSync("src-tauri/src/commands/mod.rs", "utf8");
+for (const required of ["get_app_data_summary", "clear_scan_history", "clear_cleanup_records", "reset_app_data"]) {
+  if (!commandBackend.includes(required)) {
+    violations.push(`src-tauri/src/commands/mod.rs: missing settings command "${required}"`);
   }
 }
 
