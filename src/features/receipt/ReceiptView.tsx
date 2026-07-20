@@ -1,6 +1,5 @@
 import { ReceiptIcon, ShieldIcon } from "../../components/Icons";
 import { formatBytes, formatDate } from "../../lib/format";
-import { recoveryLabel } from "../../lib/plainLanguage";
 import type { CleanupReceipt } from "../../types";
 
 interface ReceiptViewProps {
@@ -11,6 +10,7 @@ interface ReceiptViewProps {
 
 export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProps) {
   const successful = receipt.results.filter((result) => result.success).length;
+  const failed = receipt.results.filter((result) => !result.success).length;
   const skipped = receipt.results.reduce((sum, result) => sum + result.skippedEntries, 0);
   const reversible = receipt.results
     .filter((result) => result.recoveryClass === "reversible")
@@ -55,78 +55,76 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
   }
 
   return (
-    <section className="page receipt-view">
-      <header className="page-header">
+    <section className="page receipt-view simple-receipt-view">
+      <header className="page-header simple-page-header">
         <div>
-          <span className="page-kicker">Cleanup finished</span>
-          <h1>Cleanup results</h1>
-          <p>{formatDate(receipt.completedAt)}</p>
+          <span className="page-kicker">Cleanup complete</span>
+          <h1>You freed {formatBytes(receipt.actualReclaimedBytes)}</h1>
+          <p>{failed ? `${failed} item${failed === 1 ? "" : "s"} could not be completed.` : "Everything selected was processed."}</p>
         </div>
-        <span className="status-chip is-ready">Completed and checked</span>
       </header>
 
-      <div className="receipt-summary-grid">
-        <section className="surface receipt-primary-summary">
-          <span className="receipt-summary-icon"><ReceiptIcon /></span>
-          <span>Space freed</span>
-          <strong>{formatBytes(receipt.actualReclaimedBytes)}</strong>
-          <small>{successful} items completed · {skipped} files skipped</small>
-        </section>
-        <section className="surface receipt-metric"><span>Expected</span><strong>{formatBytes(receipt.estimatedReclaimBytes)}</strong></section>
-        <section className="surface receipt-metric"><span>Can restore</span><strong>{formatBytes(reversible)}</strong></section>
-      </div>
+      <section className="surface simple-complete-card">
+        <span className="receipt-summary-icon"><ReceiptIcon /></span>
+        <span className="simple-result-check" aria-hidden="true">✓</span>
+        <strong>{formatBytes(receipt.actualReclaimedBytes)}</strong>
+        <span>space freed</span>
+        <small>{successful} item{successful === 1 ? "" : "s"} cleaned{skipped ? ` · ${skipped} locked or active files skipped` : ""}</small>
+      </section>
 
       {receipt.vaultEntryIds.length > 0 && (
-        <button className="vault-callout" onClick={onOpenVault}>
+        <button className="vault-callout simple-restore-callout" onClick={onOpenVault}>
           <div>
-            <strong>{receipt.vaultEntryIds.length} cleanup group{receipt.vaultEntryIds.length === 1 ? " can" : "s can"} be restored</strong>
-            <span>Eligible files are kept for seven days. Existing files are never replaced.</span>
+            <strong>Changed your mind?</strong>
+            <span>{formatBytes(reversible)} can be restored for seven days.</span>
           </div>
-          <span>Open Restore files →</span>
+          <span>Restore files →</span>
         </button>
       )}
 
-      <section className="surface receipt-detail">
+      <section className="surface simple-results-list">
         <header>
-          <div>
-            <strong>What happened</strong>
-            <span>Result {receipt.id.slice(0, 8)}</span>
-          </div>
-          <code>{receipt.planHash.slice(0, 20)}…</code>
+          <strong>What happened</strong>
+          <span>{receipt.results.length} item{receipt.results.length === 1 ? "" : "s"}</span>
         </header>
-
         <div className="receipt-lines">
           {receipt.results.map((result) => (
-            <div className="receipt-line" key={result.findingId}>
+            <div className="receipt-line simple-receipt-line" key={result.findingId}>
               <div>
-                <div className="receipt-result-title">
-                  <strong>{result.displayName}</strong>
-                  <i className={`recovery-badge recovery-${result.recoveryClass}`}>
-                    {recoveryLabel(result.recoveryClass)}
-                  </i>
-                </div>
+                <strong>{result.displayName}</strong>
                 <span>{result.message}</span>
               </div>
               <span className={result.success ? "status-success" : "status-failed"}>
-                {result.success ? "Completed" : "Failed"}
+                {result.success ? "Done" : "Not completed"}
               </span>
             </div>
           ))}
         </div>
+      </section>
 
-        <div className="receipt-protected">
-          <ShieldIcon />
-          <div>
-            <strong>Important data was left untouched</strong>
-            <p>{receipt.protectedSummary.join(" · ")}</p>
-          </div>
+      <section className="simple-protection-note">
+        <ShieldIcon />
+        <div>
+          <strong>Important files stayed untouched</strong>
+          <span>WinReclaim only processed the items you confirmed.</span>
         </div>
       </section>
 
-      <footer className="page-action-row">
-        <button className="button button-primary" onClick={downloadShareCard}>Save summary image</button>
-        <button className="button button-secondary" onClick={copyJson}>Copy technical details</button>
-        <button className="button button-quiet" onClick={onNewScan}>Start another scan</button>
+      <details className="surface cleanup-technical-details">
+        <summary>Technical details</summary>
+        <div className="cleanup-technical-content">
+          <p>Completed {formatDate(receipt.completedAt)}</p>
+          <p>Expected: {formatBytes(receipt.estimatedReclaimBytes)}</p>
+          <p>Result ID: {receipt.id.slice(0, 8)}</p>
+          <code>{receipt.planHash.slice(0, 20)}…</code>
+          {receipt.protectedSummary.length > 0 && <p>{receipt.protectedSummary.join(" · ")}</p>}
+          <button className="button button-secondary" onClick={copyJson}>Copy technical details</button>
+        </div>
+      </details>
+
+      <footer className="page-action-row simple-complete-actions">
+        <button className="button button-primary" onClick={onNewScan}>Back to cleanup</button>
+        <button className="button button-secondary" onClick={downloadShareCard}>Save summary image</button>
       </footer>
     </section>
   );
