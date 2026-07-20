@@ -1,4 +1,5 @@
 import { formatBytes, formatDate } from "../../lib/format";
+import { recoveryLabel } from "../../lib/plainLanguage";
 import type { SnapshotSummary, StorageTimeline, TimelineDelta } from "../../types";
 
 interface TimelineViewProps {
@@ -17,9 +18,9 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
     <section className="page timeline-view">
       <header className="page-header">
         <div>
-          <span className="page-kicker">Storage Time Machine</span>
-          <h1>What changed?</h1>
-          <p>Compare local scan snapshots and trace where storage grew or disappeared.</p>
+          <span className="page-kicker">Storage history</span>
+          <h1>See what changed</h1>
+          <p>Compare scans to see what used more space and what freed space.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
@@ -29,36 +30,36 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
       {!snapshots.length ? (
         <section className="surface timeline-empty">
           <strong>No storage history yet</strong>
-          <span>Run a scan now, then scan again later to create a change baseline.</span>
-          <button className="button button-primary" onClick={onScan}>Open scan</button>
+          <span>Run a scan now and another one later. WinReclaim will compare them for you.</span>
+          <button className="button button-primary" onClick={onScan}>Start a scan</button>
         </section>
       ) : (
         <>
           <div className="timeline-metrics">
             <Metric
-              label="Profile change"
+              label="Disk change"
               value={`${positive ? "+" : "−"}${formatBytes(Math.abs(growth))}`}
-              note={timeline?.baselineAvailable ? "since the previous scan" : "baseline required"}
+              note={timeline?.baselineAvailable ? "since your previous scan" : "another scan is needed"}
               tone={positive ? "warning" : "success"}
             />
             <Metric
-              label="Reclaimable growth"
+              label="Can be cleaned"
               value={formatBytes(timeline?.reclaimableGrowthBytes ?? 0)}
-              note="growth backed by executable adapters"
+              note="space with a verified cleanup action"
               tone="accent"
             />
             <Metric
-              label="Snapshots"
+              label="Saved scans"
               value={String(snapshots.length)}
-              note={`${formatDate(snapshots[snapshots.length - 1].capturedAt)} latest`}
+              note={`latest: ${formatDate(snapshots[snapshots.length - 1].capturedAt)}`}
             />
           </div>
 
           <section className="surface timeline-chart-card">
             <header>
               <div>
-                <span className="surface-label">Profile usage</span>
-                <strong>Storage growth across scans</strong>
+                <span className="surface-label">Used space</span>
+                <strong>Disk usage across your scans</strong>
               </div>
               <span>{formatBytes(snapshots[snapshots.length - 1].usedBytes)} used</span>
             </header>
@@ -68,17 +69,17 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
           <section className="surface timeline-delta-card">
             <header>
               <div>
-                <span className="surface-label">Attribution</span>
-                <strong>Largest changes since the previous scan</strong>
+                <span className="surface-label">Likely source</span>
+                <strong>Biggest changes since your previous scan</strong>
               </div>
               <span>{timeline?.deltas.length ?? 0} changed locations</span>
             </header>
             {!timeline?.baselineAvailable ? (
               <div className="timeline-baseline-note">
-                Run another scan later to compare this machine against the current baseline.
+                Run another scan later and WinReclaim will show what changed.
               </div>
             ) : !timeline.deltas.length ? (
-              <div className="timeline-baseline-note">No classified storage changes were detected.</div>
+              <div className="timeline-baseline-note">No noticeable storage changes were found.</div>
             ) : (
               <div className="timeline-delta-list">
                 {timeline.deltas.slice(0, 30).map((delta) => (
@@ -126,8 +127,8 @@ function DeltaRow({ delta }: { delta: TimelineDelta }) {
         <code>{delta.path}</code>
       </div>
       <div className="timeline-delta-evidence">
-        <span>{delta.confidenceScore}% attribution</span>
-        <small>{delta.recoveryClass.replaceAll("_", " ")}</small>
+        <span>{delta.confidenceScore}% sure</span>
+        <small>{recoveryLabel(delta.recoveryClass)}</small>
       </div>
       <div className={`timeline-delta-value ${positive ? "is-growth" : "is-reclaimed"}`}>
         <strong>{positive ? "+" : "−"}{formatBytes(Math.abs(delta.deltaBytes))}</strong>
