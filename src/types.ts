@@ -7,6 +7,8 @@ export type RiskClass =
 export type ActionKind =
   | "user_temp"
   | "system_temp"
+  | "prefetch"
+  | "generic_directory"
   | "recycle_bin"
   | "crash_dumps"
   | "huggingface_prune"

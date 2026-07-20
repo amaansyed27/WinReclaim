@@ -168,7 +168,7 @@ mod tests {
         };
         let mut plan = build_plan(&report, &request).unwrap();
         assert!(verify_plan_hash(&plan).unwrap());
-        assert_eq!(plan.simulation.reversible_bytes, 100);
+        assert_eq!(plan.simulation.irreversible_bytes, 100);
         plan.estimated_reclaim_bytes += 1;
         assert!(!verify_plan_hash(&plan).unwrap());
     }

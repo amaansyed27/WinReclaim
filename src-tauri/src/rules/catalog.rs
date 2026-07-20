@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub const RULE_SET_VERSION: &str = "2026.07-alpha.3";
+pub const RULE_SET_VERSION: &str = "2026.07-alpha.4";
 
 type RuleIdentity = (&'static str, &'static str, &'static str);
 
@@ -59,25 +59,25 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
             ("windows.user_temp", "User Temp (%TEMP%)", "Classic Windows cleanup"),
             user_temp()?,
             RiskClass::SafeNow,
-            "The current user's %TEMP% folder used by applications for short-lived work.",
-            "Only files older than seven days are eligible. Active and locked files are skipped and eligible files enter the compressed Undo Vault.",
+            "The current user's temporary folder used by applications for short-lived work.",
+            "WinReclaim attempts every file and subfolder. Windows-locked, active or inaccessible entries are skipped; everything else is permanently removed.",
             Some(ActionKind::UserTemp),
         ),
         target(
-            ("system_drive.windows_temp", "Windows Temp", "Classic Windows cleanup"),
+            ("system_drive.windows_temp", "Windows Temp (TEMP)", "Classic Windows cleanup"),
             windows.join("Temp"),
             RiskClass::SafeNow,
             "Machine-level temporary files under the active Windows installation.",
-            "Only unlocked files older than seven days are removed. This exact-root action may require administrator rights and is not reversible.",
+            "WinReclaim attempts every file and subfolder. Locked, active, inaccessible or administrator-protected entries are skipped; everything else is permanently removed.",
             Some(ActionKind::SystemTemp),
         ),
         target(
             ("system_drive.prefetch", "Windows Prefetch", "Classic Windows cleanup"),
             windows.join("Prefetch"),
-            RiskClass::Protected,
+            RiskClass::RebuildOrRedownload,
             "Windows launch traces used to optimise application and boot startup.",
-            "Protected. WinReclaim reports its size for context but never deletes Prefetch data.",
-            None,
+            "WinReclaim attempts every entry and skips anything Windows keeps locked. Windows recreates Prefetch data, and launches may be temporarily slower afterwards.",
+            Some(ActionKind::Prefetch),
         ),
         target(
             ("system_drive.recycle_bin", "Recycle Bin", "Classic Windows cleanup"),
@@ -188,8 +188,8 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
             user.join(".gradle").join("caches"),
             RiskClass::RebuildOrRedownload,
             "Dependency artifacts and build metadata used by Gradle projects.",
-            "Future Android or JVM builds may download dependencies and rebuild metadata. Detection only in this alpha.",
-            None,
+            "Future Android or JVM builds may download dependencies and rebuild metadata.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             (
@@ -200,40 +200,40 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
             user.join(".gradle").join("wrapper").join("dists"),
             RiskClass::RebuildOrRedownload,
             "Downloaded Gradle versions used by project wrappers.",
-            "Projects using removed versions will download them again. Detection only in this alpha.",
-            None,
+            "Projects using removed versions will download them again.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             ("cargo.registry", "Cargo package cache", "Rust tooling"),
             user.join(".cargo").join("registry"),
             RiskClass::RebuildOrRedownload,
             "Rust crate indexes and downloaded package sources.",
-            "Cargo may fetch crates again. Detection only in this alpha.",
-            None,
+            "Cargo will fetch missing crates and indexes again.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             ("pip.cache", "pip cache", "Python tooling"),
             local.join("pip").join("Cache"),
             RiskClass::RebuildOrRedownload,
             "Downloaded Python wheels and source packages.",
-            "pip will download missing packages again. Detection only in this alpha.",
-            None,
+            "pip will download missing packages again.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             ("uv.cache", "uv cache", "Python tooling"),
             local.join("uv").join("cache"),
             RiskClass::RebuildOrRedownload,
             "Cached Python packages and environments managed by uv.",
-            "uv may rebuild or redownload package data. Detection only in this alpha.",
-            None,
+            "uv will rebuild or redownload package data when needed.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             ("bun.cache", "Bun package cache", "JavaScript tooling"),
             user.join(".bun").join("install").join("cache"),
             RiskClass::RebuildOrRedownload,
             "Packages cached by Bun for faster installs.",
-            "Bun will download packages again. Detection only in this alpha.",
-            None,
+            "Bun will download missing packages again.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             (
@@ -244,8 +244,8 @@ pub fn known_targets() -> Result<Vec<RuleTarget>> {
             local.join("ms-playwright"),
             RiskClass::RebuildOrRedownload,
             "Browser binaries installed for Playwright tests.",
-            "Playwright tests will reinstall missing browsers. Detection only in this alpha.",
-            None,
+            "Playwright tests will reinstall missing browser binaries.",
+            Some(ActionKind::GenericDirectory),
         ),
         target(
             ("docker.local_data", "Docker local data", "Containers"),
@@ -349,5 +349,22 @@ mod tests {
         .into_finding(10);
         assert!(!finding.action_available);
         assert!(!finding.selected_by_default);
+    }
+
+    #[test]
+    fn rebuildable_cache_rules_have_generic_actions() {
+        let rules = known_targets().unwrap();
+        for rule_id in [
+            "gradle.cache",
+            "gradle.distributions",
+            "cargo.registry",
+            "pip.cache",
+            "uv.cache",
+            "bun.cache",
+            "playwright.cache",
+        ] {
+            let rule = rules.iter().find(|rule| rule.rule_id == rule_id).unwrap();
+            assert_eq!(rule.action_kind, Some(ActionKind::GenericDirectory));
+        }
     }
 }

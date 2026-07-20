@@ -1,13 +1,11 @@
 use super::discovery::{discover_unknown_directories, DiscoveryOptions};
-use super::sizing::{
-    directory_size, eligible_temp_size, prefetch_size, recognised_dump_size, recycle_bin_size,
-};
+use super::sizing::{directory_size, recognised_dump_size, recycle_bin_size};
 use super::system_cache::{discover_system_drive_caches, SystemCacheOptions};
 use crate::domain::{
     ActionKind, Finding, RiskClass, ScanMode, ScanProgress, ScanReport, ScanRequest,
 };
 use crate::platform::windows::{command_succeeds, disk_snapshot, system_cache_roots, user_profile};
-use crate::policy::{scan_scope_fingerprint, temp_minimum_age};
+use crate::policy::scan_scope_fingerprint;
 use crate::rules::known_targets;
 use crate::storage::AppState;
 use anyhow::{anyhow, Result};
@@ -93,10 +91,6 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             ),
         );
         let stats = match target.rule_id {
-            "windows.user_temp" | "system_drive.windows_temp" => {
-                eligible_temp_size(&target.path, &state.cancel_scan, temp_minimum_age())
-            }
-            "system_drive.prefetch" => prefetch_size(&target.path, &state.cancel_scan),
             "system_drive.recycle_bin" => recycle_bin_size(),
             "windows.crash_dumps" => recognised_dump_size(&target.path, &state.cancel_scan),
             _ => directory_size(&target.path, &state.cancel_scan),
@@ -346,34 +340,9 @@ fn discover_project_outputs(
             continue;
         }
 
-        let descriptor = match name.as_str() {
-            "node_modules" => Some((
-                "project.node_modules",
-                "Project node_modules",
-                "JavaScript project dependencies",
-                "Dependencies can be restored from the project lockfile, but the project will not run until packages are installed again.",
-            )),
-            "target" => Some((
-                "project.rust_target",
-                "Rust target directory",
-                "Rust build output",
-                "Cargo will rebuild the removed binaries and intermediate artifacts.",
-            )),
-            ".venv" | "venv" => Some((
-                "project.python_venv",
-                "Python virtual environment",
-                "Python project environment",
-                "The environment must be recreated and dependencies reinstalled.",
-            )),
-            "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" => Some((
-                "project.build_output",
-                "Project build output",
-                "Generated project output",
-                "Confirm the directory is generated; the next project build should recreate it.",
-            )),
-            _ => None,
-        };
-        let Some((rule_id, display_name, category, consequence)) = descriptor else {
+        let Some((rule_id, display_name, category, consequence, risk_class)) =
+            project_output_descriptor(entry.path(), &name)
+        else {
             continue;
         };
         walker.skip_current_dir();
@@ -398,22 +367,106 @@ fn discover_project_outputs(
             category: category.to_string(),
             path: entry.path().to_string_lossy().to_string(),
             estimated_bytes: stats.bytes,
-            risk_class: RiskClass::ReviewFirst,
-            explanation: "Generated or installed data located inside a project tree.".to_string(),
+            risk_class,
+            explanation: "Rebuildable or reinstallable data verified by project files next to this directory.".to_string(),
             consequence: consequence.to_string(),
-            confidence: crate::domain::Confidence::Medium,
-            action_kind: None,
-            action_available: false,
+            confidence: crate::domain::Confidence::High,
+            action_kind: Some(ActionKind::GenericDirectory),
+            action_available: true,
             selected_by_default: false,
         });
     }
     Ok((findings, entries, skipped, bytes))
 }
 
+fn project_output_descriptor(
+    path: &Path,
+    name: &str,
+) -> Option<(
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    RiskClass,
+)> {
+    let parent = path.parent().unwrap_or(path);
+    match name {
+        "node_modules"
+            if has_any_marker(
+                parent,
+                &[
+                    "package.json",
+                    "package-lock.json",
+                    "pnpm-lock.yaml",
+                    "yarn.lock",
+                    "bun.lock",
+                    "bun.lockb",
+                ],
+            ) =>
+        {
+            Some((
+                "project.node_modules",
+                "Project node_modules",
+                "JavaScript project dependencies",
+                "Dependencies must be installed again from the project manifest or lockfile.",
+                RiskClass::RebuildOrRedownload,
+            ))
+        }
+        "target" if parent.join("Cargo.toml").is_file() => Some((
+            "project.rust_target",
+            "Rust target directory",
+            "Rust build output",
+            "Cargo will rebuild the removed binaries and intermediate artifacts.",
+            RiskClass::RebuildOrRedownload,
+        )),
+        ".venv" | "venv" if path.join("pyvenv.cfg").is_file() => Some((
+            "project.python_venv",
+            "Python virtual environment",
+            "Python project environment",
+            "The environment must be recreated and dependencies reinstalled.",
+            RiskClass::RebuildOrRedownload,
+        )),
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" if has_project_marker(parent) => {
+            Some((
+                "project.build_output",
+                "Project build output",
+                "Generated project output",
+                "The next project build should recreate this directory.",
+                RiskClass::ReviewFirst,
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn has_project_marker(directory: &Path) -> bool {
+    has_any_marker(
+        directory,
+        &[
+            "package.json",
+            "Cargo.toml",
+            "pyproject.toml",
+            "requirements.txt",
+            "CMakeLists.txt",
+            "pubspec.yaml",
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+        ],
+    )
+}
+
+fn has_any_marker(directory: &Path, names: &[&str]) -> bool {
+    names.iter().any(|name| directory.join(name).is_file())
+}
+
 fn action_is_available(action: ActionKind) -> bool {
     match action {
         ActionKind::UserTemp
         | ActionKind::SystemTemp
+        | ActionKind::Prefetch
+        | ActionKind::GenericDirectory
         | ActionKind::RecycleBin
         | ActionKind::CrashDumps => true,
         ActionKind::HuggingfacePrune => command_succeeds("hf", &["--version"]),
@@ -442,4 +495,22 @@ fn emit_progress(
             scanned_entries,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn project_outputs_require_nearby_project_evidence() {
+        let root = std::env::temp_dir().join(format!("winreclaim-project-{}", Uuid::new_v4()));
+        let project = root.join("app");
+        let modules = project.join("node_modules");
+        fs::create_dir_all(&modules).unwrap();
+        assert!(project_output_descriptor(&modules, "node_modules").is_none());
+        fs::write(project.join("package.json"), "{}").unwrap();
+        assert!(project_output_descriptor(&modules, "node_modules").is_some());
+        fs::remove_dir_all(root).unwrap();
+    }
 }

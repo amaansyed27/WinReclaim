@@ -52,15 +52,36 @@ const frontendTypes = readFileSync("src/types.ts", "utf8");
 for (const field of ["confidenceScore", "estimatedRecoveryMinutes", "protectedSummary", "reclaimableGrowthBytes"]) {
   if (frontendTypes.includes(field)) violations.push(`src/types.ts: obsolete field "${field}"`);
 }
+for (const action of ["prefetch", "generic_directory"]) {
+  if (!frontendTypes.includes(`\"${action}\"`)) {
+    violations.push(`src/types.ts: missing action kind "${action}"`);
+  }
+}
 
-const actionFiles = [
-  "src-tauri/src/actions/mod.rs",
-  "src-tauri/src/actions/filesystem.rs"
-];
-for (const file of actionFiles) {
-  const source = readFileSync(file, "utf8");
-  for (const pattern of [/ActionKind::Prefetch/, /clean_prefetch/]) {
-    if (pattern.test(source)) violations.push(`${file}: executable Prefetch cleanup remains`);
+const profileBackend = readFileSync("src-tauri/src/scanner/profile.rs", "utf8");
+if (profileBackend.includes("eligible_temp_size") || profileBackend.includes("temp_minimum_age")) {
+  violations.push("src-tauri/src/scanner/profile.rs: Temp is still age-filtered instead of measuring the full root");
+}
+for (const required of ["ActionKind::Prefetch", "ActionKind::GenericDirectory", "project_output_descriptor"]) {
+  if (!profileBackend.includes(required)) {
+    violations.push(`src-tauri/src/scanner/profile.rs: missing cleanup safeguard "${required}"`);
+  }
+}
+
+const filesystemBackend = readFileSync("src-tauri/src/actions/filesystem.rs", "utf8");
+for (const required of ["clean_user_temp", "clean_prefetch", "clean_generic_directory", "is_verified_project_output", "is_safe_dynamic_cache"]) {
+  if (!filesystemBackend.includes(required)) {
+    violations.push(`src-tauri/src/actions/filesystem.rs: missing cleanup validation "${required}"`);
+  }
+}
+if (filesystemBackend.includes("temp_minimum_age")) {
+  violations.push("src-tauri/src/actions/filesystem.rs: Temp cleanup is still age-filtered");
+}
+
+const discoveryBackend = readFileSync("src-tauri/src/scanner/discovery.rs", "utf8");
+for (const required of ["dynamic.portable_cache", "is_portable_cache_name", "ActionKind::GenericDirectory"]) {
+  if (!discoveryBackend.includes(required)) {
+    violations.push(`src-tauri/src/scanner/discovery.rs: missing portable cache behavior "${required}"`);
   }
 }
 

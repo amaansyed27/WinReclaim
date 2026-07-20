@@ -24,6 +24,8 @@ pub enum Confidence {
 pub enum ActionKind {
     UserTemp,
     SystemTemp,
+    Prefetch,
+    GenericDirectory,
     RecycleBin,
     CrashDumps,
     HuggingfacePrune,

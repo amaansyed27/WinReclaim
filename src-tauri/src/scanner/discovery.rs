@@ -1,4 +1,4 @@
-use crate::domain::{Confidence, Finding, RiskClass};
+use crate::domain::{ActionKind, Confidence, Finding, RiskClass};
 use crate::platform::windows::is_reparse_point;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -28,6 +28,16 @@ pub struct DiscoveryResult {
 struct Aggregate {
     bytes: u64,
     files: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UnknownClassification {
+    category: &'static str,
+    confidence: Confidence,
+    explanation: &'static str,
+    consequence: &'static str,
+    risk_class: RiskClass,
+    action_kind: Option<ActionKind>,
 }
 
 pub fn discover_unknown_directories(
@@ -132,23 +142,32 @@ pub fn discover_unknown_directories(
             .and_then(|value| value.to_str())
             .filter(|value| !value.trim().is_empty())
             .unwrap_or("Unclassified directory");
-        let (category, confidence, explanation) = classify_unknown_name(display_name);
+        let classification = classify_unknown_name(display_name);
+        let action_available = classification.action_kind.is_some();
 
         result.discovered_bytes = result.discovered_bytes.saturating_add(aggregate.bytes);
         selected_paths.push(path.clone());
         result.findings.push(Finding {
             id: Uuid::new_v4(),
-            rule_id: "dynamic.large_directory".to_string(),
-            display_name: format!("{display_name} (unclassified)"),
-            category: category.to_string(),
+            rule_id: if action_available {
+                "dynamic.portable_cache".to_string()
+            } else {
+                "dynamic.large_directory".to_string()
+            },
+            display_name: if action_available {
+                format!("{display_name} (detected cache)")
+            } else {
+                format!("{display_name} (unclassified)")
+            },
+            category: classification.category.to_string(),
             path: path.to_string_lossy().to_string(),
             estimated_bytes: aggregate.bytes,
-            risk_class: RiskClass::ReviewFirst,
-            explanation: explanation.to_string(),
-            consequence: "Inspection only. Confirm the owning application and contents before removing anything.".to_string(),
-            confidence,
-            action_kind: None,
-            action_available: false,
+            risk_class: classification.risk_class,
+            explanation: classification.explanation.to_string(),
+            consequence: classification.consequence.to_string(),
+            confidence: classification.confidence,
+            action_kind: classification.action_kind,
+            action_available,
             selected_by_default: false,
         });
     }
@@ -209,27 +228,56 @@ fn minimum_candidate_depth(root: &Path, path: &Path) -> usize {
     }
 }
 
-fn classify_unknown_name(name: &str) -> (&'static str, Confidence, &'static str) {
-    let lower = name.to_ascii_lowercase();
-    if lower.contains("cache") || lower.contains("temp") || lower.contains("tmp") {
-        (
-            "Potential cache",
-            Confidence::Medium,
-            "Discovered dynamically because this large directory has a cache-like name but does not match a verified WinReclaim rule.",
-        )
+fn classify_unknown_name(name: &str) -> UnknownClassification {
+    let lower = name.trim().to_ascii_lowercase();
+    if is_portable_cache_name(&lower) {
+        UnknownClassification {
+            category: "Detected cache",
+            confidence: Confidence::Medium,
+            explanation: "Detected from a portable cache-directory fingerprint rather than a machine-specific application rule.",
+            consequence: "The owning application may run slower once while it rebuilds or downloads this cache again. Locked or active entries are skipped.",
+            risk_class: RiskClass::RebuildOrRedownload,
+            action_kind: Some(ActionKind::GenericDirectory),
+        }
     } else if lower.contains("model") || lower.contains("checkpoint") || lower.contains("weights") {
-        (
-            "Potential model data",
-            Confidence::Medium,
-            "Discovered dynamically because this large directory appears related to local model data but has no verified cleanup adapter.",
-        )
+        UnknownClassification {
+            category: "Potential model data",
+            confidence: Confidence::Medium,
+            explanation: "Discovered dynamically because this large directory appears related to local model data but has no verified cleanup adapter.",
+            consequence: "Inspection only. Confirm the owning application and contents before removing anything.",
+            risk_class: RiskClass::ReviewFirst,
+            action_kind: None,
+        }
     } else {
-        (
-            "Unclassified storage",
-            Confidence::Low,
-            "Discovered by bounded size analysis because this directory is large and does not match a known WinReclaim rule.",
-        )
+        UnknownClassification {
+            category: "Unclassified storage",
+            confidence: Confidence::Low,
+            explanation: "Discovered by bounded size analysis because this directory is large and does not match a known WinReclaim rule.",
+            consequence: "Inspection only. Confirm the owning application and contents before removing anything.",
+            risk_class: RiskClass::ReviewFirst,
+            action_kind: None,
+        }
     }
+}
+
+fn is_portable_cache_name(name: &str) -> bool {
+    matches!(
+        name,
+        "cache"
+            | "caches"
+            | "cache2"
+            | "tmp"
+            | "temp"
+            | "computecache"
+            | "gpucache"
+            | "shadercache"
+            | "code cache"
+            | "media cache"
+            | "preview cache"
+            | "thumbnail cache"
+            | "node-compile-cache"
+    ) || name.ends_with("-cache")
+        || name.ends_with("_cache")
 }
 
 #[cfg(test)]
@@ -239,9 +287,9 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn discovers_large_unknown_directory_without_action() {
+    fn discovers_portable_cache_with_optional_action() {
         let root = std::env::temp_dir().join(format!("winreclaim-discovery-{}", Uuid::new_v4()));
-        let candidate = root.join("Vendor").join("mystery-cache");
+        let candidate = root.join("Vendor").join("shader-cache");
         fs::create_dir_all(&candidate).unwrap();
         let mut file = fs::File::create(candidate.join("blob.bin")).unwrap();
         file.write_all(&[1_u8; 128]).unwrap();
@@ -261,14 +309,28 @@ mod tests {
         );
 
         assert_eq!(result.findings.len(), 1);
-        assert_eq!(result.findings[0].risk_class, RiskClass::ReviewFirst);
-        assert!(!result.findings[0].action_available);
+        assert_eq!(
+            result.findings[0].risk_class,
+            RiskClass::RebuildOrRedownload
+        );
+        assert_eq!(
+            result.findings[0].action_kind,
+            Some(ActionKind::GenericDirectory)
+        );
+        assert!(result.findings[0].action_available);
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
+    fn keeps_unclassified_directories_inspection_only() {
+        let classification = classify_unknown_name("plugins");
+        assert_eq!(classification.risk_class, RiskClass::ReviewFirst);
+        assert!(classification.action_kind.is_none());
+    }
+
+    #[test]
     fn skips_winreclaim_internal_app_data() {
-        let root = PathBuf::from("C:\\Users\\Amaan");
+        let root = PathBuf::from("C:\\Users\\Example");
         let internal = root.join("AppData").join("Local").join("WinReclaim");
         let options = DiscoveryOptions {
             max_depth: 6,

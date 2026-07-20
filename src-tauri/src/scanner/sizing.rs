@@ -2,7 +2,6 @@ use crate::platform::windows::{is_reparse_point, recycle_bin_snapshot};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SizeStats {
@@ -12,19 +11,11 @@ pub struct SizeStats {
 }
 
 pub fn directory_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
-    walk_size(path, cancel, None, None)
-}
-
-pub fn eligible_temp_size(path: &Path, cancel: &AtomicBool, minimum_age: Duration) -> SizeStats {
-    walk_size(path, cancel, Some(minimum_age), None)
+    walk_size(path, cancel, None)
 }
 
 pub fn recognised_dump_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
-    walk_size(path, cancel, None, Some(&["dmp", "mdmp", "wer"]))
-}
-
-pub fn prefetch_size(path: &Path, cancel: &AtomicBool) -> SizeStats {
-    walk_size(path, cancel, None, Some(&["pf"]))
+    walk_size(path, cancel, Some(&["dmp", "mdmp", "wer"]))
 }
 
 pub fn recycle_bin_size() -> SizeStats {
@@ -37,19 +28,13 @@ pub fn recycle_bin_size() -> SizeStats {
         .unwrap_or_default()
 }
 
-fn walk_size(
-    root: &Path,
-    cancel: &AtomicBool,
-    minimum_age: Option<Duration>,
-    allowed_extensions: Option<&[&str]>,
-) -> SizeStats {
+fn walk_size(root: &Path, cancel: &AtomicBool, allowed_extensions: Option<&[&str]>) -> SizeStats {
     if !root.exists() {
         return SizeStats::default();
     }
 
     let mut stats = SizeStats::default();
     let mut stack = vec![PathBuf::from(root)];
-    let now = SystemTime::now();
 
     while let Some(path) = stack.pop() {
         if cancel.load(Ordering::Relaxed) {
@@ -75,18 +60,6 @@ fn walk_size(
                     .unwrap_or_default()
                     .to_ascii_lowercase();
                 if !extensions.iter().any(|candidate| *candidate == extension) {
-                    continue;
-                }
-            }
-            if let Some(age) = minimum_age {
-                let modified = match metadata.modified() {
-                    Ok(value) => value,
-                    Err(_) => {
-                        stats.skipped += 1;
-                        continue;
-                    }
-                };
-                if now.duration_since(modified).unwrap_or_default() < age {
                     continue;
                 }
             }
