@@ -1,12 +1,11 @@
 use crate::domain::{RestoreResult, VaultEntry, VaultStatus};
+use crate::policy::VAULT_RETENTION_DAYS;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Utc};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
-
-const RETENTION_DAYS: i64 = 7;
 
 #[derive(Debug)]
 pub struct QuarantineOutcome {
@@ -85,7 +84,7 @@ pub fn quarantine_files(
 
     let compressed = compress_payload(&payload_root);
     let created_at = Utc::now();
-    let expires_at = created_at + Duration::days(RETENTION_DAYS);
+    let expires_at = created_at + Duration::days(VAULT_RETENTION_DAYS);
     let entry = VaultEntry {
         id,
         receipt_id,
@@ -138,11 +137,12 @@ pub fn list_entries() -> Result<Vec<VaultEntry>> {
 pub fn restore_entry(id: Uuid) -> Result<RestoreResult> {
     let mut entry = load_entry(id)?;
     if entry.status != VaultStatus::Active {
-        return Err(anyhow!("This vault entry is no longer active"));
+        return Err(anyhow!("This restore entry is no longer active"));
     }
     if Utc::now() > entry.expires_at {
+        let expired_at = entry.expires_at;
         expire_entry(&mut entry)?;
-        return Err(anyhow!("The seven-day undo window has expired"));
+        return Err(anyhow!("The restore entry expired at {expired_at}"));
     }
 
     let original_root = PathBuf::from(&entry.original_root);
@@ -206,7 +206,7 @@ pub fn restore_entry(id: Uuid) -> Result<RestoreResult> {
         restored_bytes,
         status: entry.status,
         message: if remaining == 0 {
-            format!("Restored {restored_entries} entries from the Undo Vault")
+            format!("Restored {restored_entries} entries")
         } else {
             format!(
                 "Restored {restored_entries} entries; {remaining} remain because their original paths are occupied"

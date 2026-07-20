@@ -1,6 +1,7 @@
 use crate::domain::{
-    ActionKind, CleanupPlan, CleanupPlanItem, CreatePlanRequest, PlanSimulation, ScanReport,
+    CleanupPlan, CleanupPlanItem, CreatePlanRequest, PlanSimulation, RecoveryClass, ScanReport,
 };
+use crate::policy::recovery_class_for_action;
 use crate::rules::RULE_SET_VERSION;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -85,34 +86,27 @@ fn build_simulation(
             .saturating_add(estimated_reclaim_bytes),
         estimated_reclaim_bytes,
         affected_items: items.len(),
-        protected_items_touched: 0,
         ..PlanSimulation::default()
     };
 
     for item in items {
-        match item.action_kind {
-            ActionKind::UserTemp | ActionKind::CrashDumps => {
+        match recovery_class_for_action(item.action_kind) {
+            RecoveryClass::Reversible => {
                 simulation.reversible_bytes = simulation
                     .reversible_bytes
                     .saturating_add(item.estimated_bytes);
-                simulation.estimated_recovery_minutes =
-                    simulation.estimated_recovery_minutes.saturating_add(1);
             }
-            ActionKind::Prefetch => {
-                simulation.rebuildable_bytes = simulation
-                    .rebuildable_bytes
-                    .saturating_add(item.estimated_bytes);
-                simulation.estimated_recovery_minutes =
-                    simulation.estimated_recovery_minutes.saturating_add(2);
-            }
-            ActionKind::HuggingfacePrune | ActionKind::NpmCache => {
+            RecoveryClass::Redownloadable => {
                 simulation.redownloadable_bytes = simulation
                     .redownloadable_bytes
                     .saturating_add(item.estimated_bytes);
-                simulation.estimated_recovery_minutes =
-                    simulation.estimated_recovery_minutes.saturating_add(8);
             }
-            ActionKind::SystemTemp | ActionKind::RecycleBin | ActionKind::DockerPrune => {
+            RecoveryClass::Rebuildable => {
+                simulation.rebuildable_bytes = simulation
+                    .rebuildable_bytes
+                    .saturating_add(item.estimated_bytes);
+            }
+            RecoveryClass::Irreversible | RecoveryClass::Protected => {
                 simulation.irreversible_bytes = simulation
                     .irreversible_bytes
                     .saturating_add(item.estimated_bytes);
@@ -156,6 +150,7 @@ mod tests {
             started_at: Utc::now(),
             completed_at: Utc::now(),
             root: std::env::temp_dir().to_string_lossy().to_string(),
+            scope_fingerprint: "test-scope".into(),
             disk: DiskSnapshot {
                 root: "/".into(),
                 total_bytes: 1000,

@@ -46,8 +46,8 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
     context.fillText(`${successful} completed · ${skipped} skipped`, 76, 386);
     context.fillStyle = "#8ea4bf";
     context.font = "500 24px Segoe UI";
-    context.fillText(`${formatBytes(reversible)} can be restored`, 76, 438);
-    context.fillText("Local scan · reviewed cleanup · checked result", 76, 526);
+    context.fillText(`${formatBytes(reversible)} currently restorable`, 76, 438);
+    context.fillText("Local scan · reviewed cleanup · measured result", 76, 526);
     const link = document.createElement("a");
     link.download = `winreclaim-${receipt.id.slice(0, 8)}.png`;
     link.href = canvas.toDataURL("image/png");
@@ -76,7 +76,7 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
         <button className="vault-callout simple-restore-callout" onClick={onOpenVault}>
           <div>
             <strong>Changed your mind?</strong>
-            <span>{formatBytes(reversible)} can be restored for seven days.</span>
+            <span>{formatBytes(reversible)} is currently available in Restore files.</span>
           </div>
           <span>Restore files →</span>
         </button>
@@ -105,8 +105,8 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
       <section className="simple-protection-note">
         <ShieldIcon />
         <div>
-          <strong>Important files stayed untouched</strong>
-          <span>WinReclaim only processed the items you confirmed.</span>
+          <strong>Only confirmed actions were executed</strong>
+          <span>The receipt below is generated from the measured before-and-after result of each action.</span>
         </div>
       </section>
 
@@ -114,10 +114,12 @@ export function ReceiptView({ receipt, onNewScan, onOpenVault }: ReceiptViewProp
         <summary>Technical details</summary>
         <div className="cleanup-technical-content">
           <p>Completed {formatDate(receipt.completedAt)}</p>
-          <p>Expected: {formatBytes(receipt.estimatedReclaimBytes)}</p>
+          <p>Estimated reclaim: {formatBytes(receipt.estimatedReclaimBytes)}</p>
+          <p>Free space before: {formatBytes(receipt.diskFreeBefore)}</p>
+          <p>Free space after: {formatBytes(receipt.diskFreeAfter)}</p>
+          <p>Measured reclaim: {formatBytes(receipt.actualReclaimedBytes)}</p>
           <p>Result ID: {receipt.id.slice(0, 8)}</p>
           <code>{receipt.planHash.slice(0, 20)}…</code>
-          {receipt.protectedSummary.length > 0 && <p>{receipt.protectedSummary.join(" · ")}</p>}
           <button className="button button-secondary" onClick={copyJson}>Copy technical details</button>
         </div>
       </details>

@@ -5,6 +5,7 @@ mod insights;
 mod intent;
 mod planner;
 mod platform;
+mod policy;
 mod receipts;
 mod rules;
 mod scanner;

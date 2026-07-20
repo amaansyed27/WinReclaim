@@ -1,5 +1,4 @@
 import { formatBytes, formatDate } from "../../lib/format";
-import { recoveryLabel } from "../../lib/plainLanguage";
 import type { SnapshotSummary, StorageTimeline, TimelineDelta } from "../../types";
 
 interface TimelineViewProps {
@@ -11,9 +10,11 @@ interface TimelineViewProps {
 
 export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineViewProps) {
   const snapshots = timeline?.snapshots ?? [];
-  const growth = timeline?.totalGrowthBytes ?? 0;
-  const positive = growth >= 0;
+  const growth = timeline?.totalGrowthBytes ?? null;
+  const hasBaseline = Boolean(timeline?.baselineAvailable && growth !== null);
+  const positive = (growth ?? 0) >= 0;
   const changes = timeline?.deltas ?? [];
+  const comparedWith = timeline?.comparedWithAt ? formatDate(timeline.comparedWithAt) : null;
 
   return (
     <section className="page timeline-view simple-timeline-view">
@@ -21,7 +22,7 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
         <div>
           <span className="page-kicker">History</span>
           <h1>See what changed</h1>
-          <p>WinReclaim compares your scans and shows where storage increased or decreased.</p>
+          <p>WinReclaim compares scans made with the same depth and options so the results stay meaningful.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
@@ -31,19 +32,27 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
       {!snapshots.length ? (
         <section className="surface timeline-empty simple-empty-card">
           <strong>No history yet</strong>
-          <span>Run a scan now and another one later. WinReclaim will compare them automatically.</span>
+          <span>Run a scan now and another scan later using the same scan profile.</span>
           <button className="button button-primary" onClick={onScan}>Start a scan</button>
         </section>
       ) : (
         <>
           <div className="simple-history-summary">
-            <section className={`surface simple-history-metric ${positive ? "is-growth" : "is-smaller"}`}>
-              <span>Since the previous scan</span>
-              <strong>{positive ? "+" : "−"}{formatBytes(Math.abs(growth))}</strong>
-              <small>{timeline?.baselineAvailable ? (positive ? "more space is being used" : "less space is being used") : "run another scan to compare"}</small>
+            <section className={`surface simple-history-metric ${hasBaseline ? (positive ? "is-growth" : "is-smaller") : ""}`}>
+              <span>Storage change</span>
+              <strong>
+                {hasBaseline && growth !== null
+                  ? `${positive ? "+" : "−"}${formatBytes(Math.abs(growth))}`
+                  : "Not enough data"}
+              </strong>
+              <small>
+                {hasBaseline
+                  ? `Compared with ${comparedWith}`
+                  : "Run another scan with the same depth and options"}
+              </small>
             </section>
             <section className="surface simple-history-metric">
-              <span>Recent scan</span>
+              <span>Most recent scan</span>
               <strong>{formatDate(snapshots[snapshots.length - 1].capturedAt)}</strong>
               <small>{formatBytes(snapshots[snapshots.length - 1].freeBytes)} free</small>
             </section>
@@ -63,15 +72,17 @@ export function TimelineView({ timeline, loading, onRefresh, onScan }: TimelineV
           <section className="surface simple-change-list">
             <header>
               <div>
-                <strong>Biggest changes</strong>
-                <span>Compared with your previous scan</span>
+                <strong>Biggest measured changes</strong>
+                <span>{hasBaseline ? `Compared with ${comparedWith}` : "A matching earlier scan is required"}</span>
               </div>
               <span>{changes.length}</span>
             </header>
-            {!timeline?.baselineAvailable ? (
-              <div className="timeline-baseline-note">Run another scan later to see what changed.</div>
+            {!hasBaseline ? (
+              <div className="timeline-baseline-note">
+                Existing scans used different depths or options. Run the same scan profile again to create a valid comparison.
+              </div>
             ) : !changes.length ? (
-              <div className="timeline-baseline-note">No noticeable storage changes were found.</div>
+              <div className="timeline-baseline-note">No measured changes were found in the scanned locations.</div>
             ) : (
               <>
                 <div className="timeline-delta-list">
@@ -106,13 +117,13 @@ function DeltaRow({ delta }: { delta: TimelineDelta }) {
       <div className="timeline-delta-main">
         <div>
           <strong>{delta.displayName}</strong>
-          <span>{delta.owner}</span>
+          <span>{delta.category}{delta.actionAvailable ? " · cleanup available" : ""}</span>
         </div>
         <details className="finding-details">
           <summary>More details</summary>
           <div className="finding-details-content">
             <code>{delta.path}</code>
-            <p>{delta.confidenceScore}% confidence · {recoveryLabel(delta.recoveryClass)}</p>
+            <p>Previous scan: {formatBytes(delta.previousBytes)} · Current scan: {formatBytes(delta.currentBytes)}</p>
           </div>
         </details>
       </div>

@@ -1,14 +1,13 @@
 use crate::platform::windows::{
     canonical_is_within, is_reparse_point, local_app_data, windows_directory,
 };
+use crate::policy::{temp_minimum_age, VAULT_RETENTION_DAYS};
 use crate::vault::quarantine_files;
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
-
-const TEMP_MINIMUM_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Debug)]
 pub struct FilesystemOutcome {
@@ -30,7 +29,7 @@ pub fn quarantine_user_temp(
     validate_exact_target(target, &allowed)?;
     quarantine_tree(
         target,
-        Some(TEMP_MINIMUM_AGE),
+        Some(temp_minimum_age()),
         None,
         receipt_id,
         finding_id,
@@ -44,17 +43,11 @@ pub fn clean_system_temp(target: &Path) -> Result<FilesystemOutcome> {
     validate_exact_target(target, &allowed)?;
     delete_tree(
         target,
-        Some(TEMP_MINIMUM_AGE),
+        Some(temp_minimum_age()),
         None,
         true,
         "stale Windows Temp",
     )
-}
-
-pub fn clean_prefetch(target: &Path) -> Result<FilesystemOutcome> {
-    let allowed = windows_directory()?.join("Prefetch");
-    validate_exact_target(target, &allowed)?;
-    delete_tree(target, None, Some(&["pf"]), false, "Windows Prefetch .pf")
 }
 
 pub fn quarantine_crash_dumps(
@@ -132,9 +125,9 @@ fn quarantine_tree(
     let skipped_entries = discovery_skipped.saturating_add(outcome.skipped_entries);
     let affected_entries = outcome.moved_entries.saturating_add(removed_directories);
     let vault_description = if outcome.compressed {
-        "compressed seven-day Undo Vault"
+        format!("compressed {VAULT_RETENTION_DAYS}-day Undo Vault")
     } else {
-        "seven-day Undo Vault"
+        format!("{VAULT_RETENTION_DAYS}-day Undo Vault")
     };
 
     Ok(FilesystemOutcome {

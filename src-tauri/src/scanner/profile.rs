@@ -7,6 +7,7 @@ use crate::domain::{
     ActionKind, Finding, RiskClass, ScanMode, ScanProgress, ScanReport, ScanRequest,
 };
 use crate::platform::windows::{command_succeeds, disk_snapshot, system_cache_roots, user_profile};
+use crate::policy::{scan_scope_fingerprint, temp_minimum_age};
 use crate::rules::known_targets;
 use crate::storage::AppState;
 use anyhow::{anyhow, Result};
@@ -14,11 +15,9 @@ use chrono::Utc;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
-const TEMP_MINIMUM_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 type ProgressCounts = (usize, usize, u64, u64);
 
 pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> Result<ScanReport> {
@@ -95,7 +94,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         );
         let stats = match target.rule_id {
             "windows.user_temp" | "system_drive.windows_temp" => {
-                eligible_temp_size(&target.path, &state.cancel_scan, TEMP_MINIMUM_AGE)
+                eligible_temp_size(&target.path, &state.cancel_scan, temp_minimum_age())
             }
             "system_drive.prefetch" => prefetch_size(&target.path, &state.cancel_scan),
             "system_drive.recycle_bin" => recycle_bin_size(),
@@ -233,6 +232,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         started_at,
         completed_at: Utc::now(),
         root: root.to_string_lossy().to_string(),
+        scope_fingerprint: scan_scope_fingerprint(&root, &request),
         disk: disk_snapshot(&root)?,
         findings,
         scanned_entries,
@@ -414,7 +414,6 @@ fn action_is_available(action: ActionKind) -> bool {
     match action {
         ActionKind::UserTemp
         | ActionKind::SystemTemp
-        | ActionKind::Prefetch
         | ActionKind::RecycleBin
         | ActionKind::CrashDumps => true,
         ActionKind::HuggingfacePrune => command_succeeds("hf", &["--version"]),

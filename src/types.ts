@@ -7,7 +7,6 @@ export type RiskClass =
 export type ActionKind =
   | "user_temp"
   | "system_temp"
-  | "prefetch"
   | "recycle_bin"
   | "crash_dumps"
   | "huggingface_prune"
@@ -62,6 +61,7 @@ export interface ScanReport {
   startedAt: string;
   completedAt: string;
   root: string;
+  scopeFingerprint: string;
   disk: DiskSnapshot;
   findings: Finding[];
   scannedEntries: number;
@@ -114,9 +114,7 @@ export interface PlanSimulation {
   redownloadableBytes: number;
   rebuildableBytes: number;
   irreversibleBytes: number;
-  estimatedRecoveryMinutes: number;
   affectedItems: number;
-  protectedItemsTouched: number;
 }
 
 export interface CleanupPlan {
@@ -156,20 +154,15 @@ export interface CleanupReceipt {
   estimatedReclaimBytes: number;
   results: ActionResult[];
   vaultEntryIds: string[];
-  protectedSummary: string[];
   ruleSetVersion: string;
 }
 
 export interface ReclaimPassport {
   findingId: string;
-  owner: string;
   lastChangedAt?: string | null;
   recoveryClass: RecoveryClass;
   recoveryMethod: string;
-  estimatedRecoveryMinutes?: number | null;
-  confidenceScore: number;
   activityNote: string;
-  evidence: string[];
 }
 
 export interface SnapshotSummary {
@@ -178,8 +171,6 @@ export interface SnapshotSummary {
   capturedAt: string;
   usedBytes: number;
   freeBytes: number;
-  classifiedBytes: number;
-  findingCount: number;
 }
 
 export interface TimelineDelta {
@@ -187,19 +178,17 @@ export interface TimelineDelta {
   displayName: string;
   category: string;
   path: string;
-  owner: string;
   previousBytes: number;
   currentBytes: number;
   deltaBytes: number;
-  confidenceScore: number;
-  recoveryClass: RecoveryClass;
+  actionAvailable: boolean;
 }
 
 export interface StorageTimeline {
   snapshots: SnapshotSummary[];
   deltas: TimelineDelta[];
-  totalGrowthBytes: number;
-  reclaimableGrowthBytes: number;
+  totalGrowthBytes?: number | null;
+  comparedWithAt?: string | null;
   baselineAvailable: boolean;
 }
 

@@ -157,14 +157,6 @@ pub async fn execute_cleanup_plan(
             estimated_reclaim_bytes: plan.estimated_reclaim_bytes,
             results,
             vault_entry_ids,
-            protected_summary: vec![
-                "Browser profiles".into(),
-                "Ollama models".into(),
-                "Docker volumes".into(),
-                "Android emulators".into(),
-                "Unverified Windows directories".into(),
-                "Project source".into(),
-            ],
             rule_set_version: plan.rule_set_version.clone(),
         };
 
@@ -209,9 +201,9 @@ pub fn get_reclaim_passports(
         .lock()
         .map_err(|_| "Scan state is unavailable".to_string())?
         .clone()
-        .ok_or_else(|| "Run a scan before requesting reclaim passports".to_string())?;
+        .ok_or_else(|| "Run a scan before requesting item details".to_string())?;
     if report.scan_id != scan_id {
-        return Err("The requested passport scan is no longer current".to_string());
+        return Err("The requested scan is no longer current".to_string());
     }
     Ok(build_reclaim_passports(&report))
 }

@@ -62,7 +62,7 @@ export function FindingsView({
         <div>
           <span className="page-kicker">Step 2 of 3</span>
           <h1>Choose what to clean</h1>
-          <p>The safest items are grouped first. Use the recommendation or choose items yourself.</p>
+          <p>The safest items are grouped first. Every amount and consequence comes from the completed scan.</p>
         </div>
       </header>
 
@@ -71,12 +71,20 @@ export function FindingsView({
           <span className="recommendation-check" aria-hidden="true">✓</span>
           <div>
             <span className="surface-label">Recommended cleanup</span>
-            <h2>{formatBytes(recommendedBytes)} is safe to clean</h2>
-            <p>These are temporary files or crash reports that WinReclaim can restore for seven days when supported.</p>
+            <h2>
+              {recommended.length
+                ? `${formatBytes(recommendedBytes)} is ready for review`
+                : "No recommended cleanup was found"}
+            </h2>
+            <p>
+              {recommended.length
+                ? "These locations have verified cleanup actions. Each item below states whether it is restored, recreated or permanently removed."
+                : "Optional and inspection-only findings are still listed below when the scan discovered them."}
+            </p>
           </div>
         </div>
         <div className="recommendation-actions">
-          <button className="button button-primary" onClick={selectRecommended}>Use recommendation</button>
+          <button className="button button-primary" onClick={selectRecommended} disabled={!recommended.length}>Use recommendation</button>
           <button className="button button-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear selection</button>
         </div>
       </section>
@@ -93,7 +101,7 @@ export function FindingsView({
 
       <FindingSection
         title="Recommended"
-        note="Safe choices for most people."
+        note="Verified cleanup actions with the lowest expected impact."
         items={recommended}
         bytes={recommendedBytes}
         passports={passports}
@@ -104,7 +112,7 @@ export function FindingsView({
       {optional.length > 0 && (
         <FindingSection
           title="Optional cleanup"
-          note="These caches can be downloaded or recreated later. Cleaning them may make the next app or developer-tool run slower."
+          note="Review the stated consequence before selecting these items."
           items={optional}
           bytes={optionalBytes}
           passports={passports}
@@ -119,11 +127,11 @@ export function FindingsView({
             <div>
               <ShieldIcon />
               <span>
-                <strong>{reviewOnly.length} large folders WinReclaim will not clean</strong>
-                <small>They use {formatBytes(reviewOnlyBytes)}. Open this only when you want to inspect them yourself.</small>
+                <strong>{reviewOnly.length} locations WinReclaim will not clean</strong>
+                <small>They use {formatBytes(reviewOnlyBytes)}. These are shown for inspection only.</small>
               </span>
             </div>
-            <span>Show folders</span>
+            <span>Show locations</span>
           </summary>
           <div className="review-only-content">
             {reviewOnly.map((finding) => (

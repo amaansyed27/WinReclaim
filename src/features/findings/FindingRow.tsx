@@ -51,12 +51,13 @@ export function FindingRow({ finding, passport, selected, onToggle }: FindingRow
           <div className="finding-details-content">
             <code>{finding.path}</code>
             {passport && (
-              <dl>
-                <div><dt>Created by</dt><dd>{passport.owner}</dd></div>
-                <div><dt>After cleanup</dt><dd>{recoveryLabel(passport.recoveryClass)}</dd></div>
-                <div><dt>Last changed</dt><dd>{passport.lastChangedAt ? formatDate(passport.lastChangedAt) : "Unknown"}</dd></div>
-                <div><dt>WinReclaim confidence</dt><dd>{passport.confidenceScore}%</dd></div>
-              </dl>
+              <>
+                <dl>
+                  <div><dt>After cleanup</dt><dd>{recoveryLabel(passport.recoveryClass)}</dd></div>
+                  <div><dt>Last changed</dt><dd>{passport.lastChangedAt ? formatDate(passport.lastChangedAt) : "Unavailable"}</dd></div>
+                </dl>
+                <p>{passport.activityNote}. {passport.recoveryMethod}</p>
+              </>
             )}
           </div>
         </details>

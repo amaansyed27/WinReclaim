@@ -29,6 +29,9 @@ export function VaultView({
 }: VaultViewProps) {
   const active = entries.filter((entry) => entry.status === "active");
   const reversibleBytes = active.reduce((sum, entry) => sum + entry.storedBytes, 0);
+  const nextExpiry = active
+    .map((entry) => entry.expiresAt)
+    .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0];
 
   return (
     <section className="page vault-view simple-vault-view">
@@ -36,7 +39,7 @@ export function VaultView({
         <div>
           <span className="page-kicker">Restore files</span>
           <h1>Undo a recent cleanup</h1>
-          <p>Temporary files saved by WinReclaim remain available for seven days.</p>
+          <p>Each saved cleanup shows its actual expiration date and original location.</p>
         </div>
         <button className="button button-secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
@@ -49,7 +52,7 @@ export function VaultView({
           <strong>{formatBytes(reversibleBytes)}</strong>
           <p>{active.length} cleanup group{active.length === 1 ? "" : "s"} can still be restored.</p>
         </div>
-        <span>Kept for 7 days</span>
+        <span>{nextExpiry ? `Next expiry ${formatDate(nextExpiry)}` : "Nothing currently available"}</span>
       </section>
 
       {lastRestore && (
