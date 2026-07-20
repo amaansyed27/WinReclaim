@@ -13,8 +13,6 @@ interface FindingsViewProps {
   intentSummary: string | null;
   onInterpretIntent: (prompt: string) => Promise<void>;
   onToggle: (id: string) => void;
-  onSelectRecommended: () => void;
-  onClearSelection: () => void;
   onBack: () => void;
   onCreatePlan: () => void;
 }
@@ -28,8 +26,6 @@ export function FindingsView({
   intentSummary,
   onInterpretIntent,
   onToggle,
-  onSelectRecommended,
-  onClearSelection,
   onBack,
   onCreatePlan
 }: FindingsViewProps) {
@@ -50,13 +46,23 @@ export function FindingsView({
   const optionalBytes = optional.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const reviewOnlyBytes = reviewOnly.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
 
+  function selectRecommended() {
+    recommended.forEach((finding) => {
+      if (!selectedIds.has(finding.id)) onToggle(finding.id);
+    });
+  }
+
+  function clearSelection() {
+    selectedIds.forEach((id) => onToggle(id));
+  }
+
   return (
     <section className="page findings-view simple-findings-view">
       <header className="page-header simple-page-header">
         <div>
           <span className="page-kicker">Step 2 of 3</span>
           <h1>Choose what to clean</h1>
-          <p>The safest items are selected for you. You can change the selection before anything is removed.</p>
+          <p>The safest items are grouped first. Use the recommendation or choose items yourself.</p>
         </div>
       </header>
 
@@ -70,8 +76,8 @@ export function FindingsView({
           </div>
         </div>
         <div className="recommendation-actions">
-          <button className="button button-primary" onClick={onSelectRecommended}>Use recommendation</button>
-          <button className="button button-secondary" onClick={onClearSelection} disabled={!selectedIds.size}>Clear selection</button>
+          <button className="button button-primary" onClick={selectRecommended}>Use recommendation</button>
+          <button className="button button-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear selection</button>
         </div>
       </section>
 
