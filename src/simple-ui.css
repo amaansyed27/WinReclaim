@@ -58,7 +58,13 @@
 .recommendation-check { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #061b12; background: var(--success); font-weight: 800; }
 .cleanup-recommendation h2 { margin: 5px 0 3px; color: var(--text); font-size: 22px; }
 .cleanup-recommendation p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
-.recommendation-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.recommendation-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.finding-filter-bar { margin-top: 14px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 14px 16px; border-radius: 10px; }
+.finding-filter-bar label { width: min(540px,100%); }
+.finding-filter-bar label > span { display: block; margin-bottom: 6px; color: var(--muted-strong); font-size: 11px; font-weight: 650; }
+.finding-filter-bar input { width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 7px; outline: none; color: var(--text); background: rgba(4,13,23,.7); font: inherit; }
+.finding-filter-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.finding-filter-bar > span { flex: none; padding-bottom: 10px; color: var(--muted); font-size: 11px; }
 .simple-finding-group { margin-top: 16px; border-radius: 10px; }
 .simple-finding-group .finding-group-head { min-height: 68px; padding: 13px 16px; }
 .simple-finding-group .finding-group-head h2 { font-size: 17px; }
@@ -158,6 +164,9 @@
 .simple-delta-row { grid-template-columns: 8px minmax(0,1fr) auto; }
 .more-history-items > summary { cursor: pointer; padding: 13px 16px; border-top: 1px solid var(--line); color: var(--accent); font-size: 11px; }
 .simple-empty-card { margin-top: 20px; padding: 34px; border-radius: 12px; }
+.simple-empty-card strong,
+.simple-empty-card span { display: block; }
+.simple-empty-card span { margin-top: 6px; color: var(--muted); font-size: 12px; }
 
 .simple-intent-planner { margin-top: 14px; border-radius: 10px; }
 .simple-intent-planner > summary span,
@@ -169,6 +178,9 @@
   .simple-page-header h1 { font-size: 28px; }
   .simple-scan-card { padding: 28px 18px; }
   .cleanup-recommendation { align-items: flex-start; flex-direction: column; }
+  .recommendation-actions { justify-content: flex-start; }
+  .finding-filter-bar { align-items: stretch; flex-direction: column; gap: 8px; }
+  .finding-filter-bar > span { padding-bottom: 0; }
   .simple-finding-row { grid-template-columns: 28px minmax(0,1fr); }
   .simple-finding-row .finding-size { grid-column: 2; text-align: left; }
   .advanced-option-grid,
