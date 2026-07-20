@@ -59,8 +59,8 @@ export function PlanView({ plan, executing, error, onBack, onExecute }: PlanView
       <section className="simple-protection-note">
         <ShieldIcon />
         <div>
-          <strong>Your important files are not included</strong>
-          <span>Browser profiles, local AI models, Android emulators, project source and unknown folders stay untouched.</span>
+          <strong>Only the items above are included</strong>
+          <span>Personal files, installed apps, browser data and folders without a verified cleanup rule stay untouched.</span>
         </div>
       </section>
 
