@@ -324,7 +324,6 @@ fn scan_single_root(
         }
         scanned_entries = scanned_entries.saturating_add(system_caches.scanned_entries);
         skipped_entries = skipped_entries.saturating_add(system_caches.skipped_entries);
-        discovered_bytes = discovered_bytes.saturating_add(system_caches.discovered_bytes);
         findings.extend(system_caches.findings);
     }
 
