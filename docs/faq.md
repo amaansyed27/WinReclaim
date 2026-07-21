@@ -18,23 +18,35 @@ No. WinReclaim intentionally does not expose arbitrary-path deletion. Executable
 
 ## What does “local-first” mean?
 
-Scanning, classification, snapshots, planning, cleanup, receipts, vault restoration and the optional Storage Assistant run locally. No telemetry is included.
+Scanning, classification, snapshots, planning, cleanup, receipts and vault restoration run locally. No desktop telemetry is included.
 
-Optional network access is limited to signed updates, user-initiated model/runtime installation and the optional OpenAI reclaim-by-intent feature.
+Optional network access is limited to signed updates and explicit requests for OpenRouter-backed Storage Assistant or reclaim-by-intent help. Those requests use bounded anonymized metadata and never control cleanup execution.
 
-## Does it send my file paths to OpenAI?
+## Does it send my file paths to a cloud model?
 
-The optional reclaim-by-intent feature is designed to send constrained candidate metadata rather than filesystem paths, usernames, project names or directory trees. The feature requires a user-provided API key and is not needed for normal operation.
+No. The optional cloud features exclude filesystem paths, drive labels, usernames, folder names, project names, directory trees and file contents.
+
+Storage summaries send aggregate drive totals and category/risk/action counts. Reclaim-by-intent sends the user's sentence plus opaque candidate IDs, category, size, deterministic risk and a generic consequence class.
+
+## Do I need an OpenRouter API key?
+
+No. The desktop application calls the WinReclaim server-side proxy. The provider credential is stored only as a Vercel environment secret and is never included in the installer or shown to the frontend.
 
 ## What is the Storage Assistant?
 
-It is an optional local Qwen3.5-2B GGUF model run through a verified `llama.cpp` Windows CPU sidecar. It summarizes a completed deterministic scan and may improve labels for ambiguous findings.
+It is an optional cloud explanation layer using OpenRouter's `openrouter/free` router. It summarizes aggregate metadata from a completed deterministic scan.
 
 It cannot change risk, enable cleanup, select items, create a plan or delete data.
 
-## Is the Storage Assistant bundled?
+## Is a model bundled or downloaded?
 
-No. The user chooses whether to download it. The model and runtime are pinned, verified and stored under `%LOCALAPPDATA%\WinReclaim\models\storage-assistant`.
+No. Version 1.2.1 does not bundle or download model weights or a local inference runtime. The previous Qwen/`llama.cpp` integration was removed.
+
+Version 1.2.1 automatically deletes the retired `%LOCALAPPDATA%\WinReclaim\models\storage-assistant` directory during startup.
+
+## What happens if free model capacity is unavailable?
+
+The assistant shows a retryable error. Scanning, findings, planning, cleanup, history, receipts and restore continue to work normally because they do not depend on the cloud model.
 
 ## What is Storage Time Machine?
 
@@ -118,7 +130,7 @@ The application retrieves `latest.json` from the official GitHub Release, downlo
 
 ## Can I reset the app?
 
-Settings provides separate controls for scan history, receipt records and broader application reset. The optional model is preserved by normal reset. Vault restore files are preserved unless explicitly included in the reset.
+Settings provides separate controls for scan history, receipt records and broader application reset. Vault restore files are preserved unless explicitly included in the reset.
 
 ## Where is local data stored?
 
@@ -136,6 +148,6 @@ Read [SUPPORT.md](../SUPPORT.md), search existing issues and use the bug-report 
 
 Follow [SECURITY.md](../SECURITY.md) and use GitHub private vulnerability reporting. Do not publish exploit details in a public issue.
 
-## Is WinReclaim affiliated with OpenAI?
+## Is WinReclaim affiliated with OpenAI or OpenRouter?
 
-No. WinReclaim was built for the OpenAI Build Week July Edition with GPT-5.6 Sol as a development collaborator, but it is an independent open-source project and is not endorsed by or affiliated with OpenAI.
+No. WinReclaim was built for the OpenAI Build Week July Edition with GPT-5.6 Sol as a development collaborator, but it is an independent open-source project and is not endorsed by or affiliated with OpenAI, OpenRouter or routed model providers.
