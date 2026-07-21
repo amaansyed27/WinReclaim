@@ -1,6 +1,6 @@
 # WinReclaim Storage Assistant
 
-The Storage Assistant is an optional local model that turns a completed deterministic scan into a compact human-readable summary and suggests clearer labels for ambiguous folders.
+The Storage Assistant is an optional local model that turns a completed deterministic scan into a compact human-readable summary and suggests clearer labels for ambiguous folders. Inference runs only when the user explicitly requests a summary from the completed scan.
 
 ## Model
 
