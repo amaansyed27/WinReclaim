@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const genericUiFiles = [
   "src/App.tsx",
   "src/components/Sidebar.tsx",
   "src/features/assistant/StorageAssistantPanel.tsx",
-  "src/features/assistant/StorageAssistantSettings.tsx",
   "src/features/findings/FindingsView.tsx",
   "src/features/findings/FindingRow.tsx",
   "src/features/findings/IntentPlanner.tsx",
@@ -124,16 +123,23 @@ for (const required of ["volume_id", "file_system", "total_bytes", "normalized_r
 }
 
 const appDataBackend = readFileSync("src-tauri/src/app_data.rs", "utf8");
-for (const required of ["DATA_GENERATION", "clear_scan_history", "clear_cleanup_records", "include_restore_files"]) {
+for (const required of [
+  "DATA_GENERATION",
+  "clear_scan_history",
+  "clear_cleanup_records",
+  "include_restore_files",
+  "remove_retired_local_assistant",
+  "storage-assistant"
+]) {
   if (!appDataBackend.includes(required)) {
-    violations.push(`src-tauri/src/app_data.rs: missing reset safeguard "${required}"`);
+    violations.push(`src-tauri/src/app_data.rs: missing migration/reset safeguard "${required}"`);
   }
 }
 if (!appDataBackend.includes("if !request.include_restore_files")) {
   violations.push("src-tauri/src/app_data.rs: factory reset no longer preserves Restore files by default");
 }
-if (!appDataBackend.includes('name == "models"')) {
-  violations.push("src-tauri/src/app_data.rs: application reset no longer preserves the optional model");
+if (appDataBackend.includes('name == "models"')) {
+  violations.push("src-tauri/src/app_data.rs: retired local model directory is still preserved by reset");
 }
 
 const commandBackend = readFileSync("src-tauri/src/commands/mod.rs", "utf8");
@@ -164,69 +170,88 @@ for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilt
   }
 }
 
+for (const retired of [
+  "src-tauri/src/assistant/download.rs",
+  "src-tauri/src/assistant/inference.rs",
+  "src-tauri/src/assistant/prompt.rs",
+  "src-tauri/src/intent/openai.rs",
+  "src/features/assistant/StorageAssistantSettings.tsx"
+]) {
+  if (existsSync(retired)) violations.push(`${retired}: retired local/direct-provider implementation still exists`);
+}
+
 const assistantBackend = readFileSync("src-tauri/src/assistant/mod.rs", "utf8");
 for (const required of [
-  "Qwen3.5-2B",
-  "Q4_K_M",
-  "MODEL_SHA256",
-  "RUNTIME_TAG",
-  "RUNTIME_RELEASE_API",
-  "runtime_path",
-  "pub fn analyze"
+  "openrouter/free",
+  "cloud::request",
+  "StorageSummaryPayload",
+  "contains_cleanup_claim",
+  "advisory_only: true",
+  "Paths, usernames, folder names, project names and file contents stay on this PC"
 ]) {
   if (!assistantBackend.includes(required)) {
-    violations.push(`src-tauri/src/assistant/mod.rs: missing local assistant contract "${required}"`);
+    violations.push(`src-tauri/src/assistant/mod.rs: missing cloud assistant safeguard "${required}"`);
   }
 }
 
-const assistantDownload = readFileSync("src-tauri/src/assistant/download.rs", "utf8");
-for (const required of ["GithubRelease", "runtime_sha256", "ZipArchive", "enclosed_name", "download_verified"]) {
-  if (!assistantDownload.includes(required)) {
-    violations.push(`src-tauri/src/assistant/download.rs: missing sidecar verification "${required}"`);
-  }
-}
-
-const assistantInference = readFileSync("src-tauri/src/assistant/inference.rs", "utf8");
+const cloudBackend = readFileSync("src-tauri/src/cloud.rs", "utf8");
 for (const required of [
-  "Command::new",
-  "--conversation",
-  "--single-turn",
-  "--system-prompt-file",
-  "--json-schema-file",
-  "--output-file",
-  "--reasoning-budget",
-  "advisory_only: true",
-  "contains_cleanup_claim",
-  "finding_ids.contains",
-  "MAX_ANNOTATIONS"
+  "https://winreclaim.vercel.app/api/assistant",
+  "X-WinReclaim-Client",
+  "WINRECLAIM_ASSISTANT_URL",
+  "Duration::from_secs(60)"
 ]) {
-  if (!assistantInference.includes(required)) {
-    violations.push(`src-tauri/src/assistant/inference.rs: missing output safeguard "${required}"`);
+  if (!cloudBackend.includes(required)) {
+    violations.push(`src-tauri/src/cloud.rs: missing cloud transport contract "${required}"`);
   }
 }
-if (assistantInference.includes("llama_cpp_2")) {
-  violations.push("src-tauri/src/assistant/inference.rs: embedded llama.cpp bindings were reintroduced");
+
+const intentBackend = readFileSync("src-tauri/src/intent/openrouter.rs", "utf8");
+for (const required of [
+  "openrouter/free",
+  "cloud::request",
+  "candidate_id",
+  "risk_class",
+  "paths, usernames, folder names, project names and file contents stay local"
+]) {
+  if (!intentBackend.includes(required)) {
+    violations.push(`src-tauri/src/intent/openrouter.rs: missing intent privacy contract "${required}"`);
+  }
+}
+
+const proxy = readFileSync("landing-page/api/assistant.js", "utf8");
+for (const required of [
+  "OPENROUTER_API_KEY",
+  'const MODEL = "openrouter/free"',
+  "response_format",
+  "require_parameters: true",
+  "RATE_LIMIT",
+  "x-winreclaim-client",
+  "Never claim anything is safe to delete or remove",
+  "Paths"
+]) {
+  if (!proxy.includes(required)) {
+    violations.push(`landing-page/api/assistant.js: missing proxy restriction "${required}"`);
+  }
+}
+if (/sk-or-v1-[A-Za-z0-9_-]+/.test(proxy)) {
+  violations.push("landing-page/api/assistant.js: OpenRouter key was committed to source");
 }
 
 const cargoManifest = readFileSync("src-tauri/Cargo.toml", "utf8");
-if (cargoManifest.includes("llama-cpp-2")) {
-  violations.push("src-tauri/Cargo.toml: embedded llama.cpp dependency was reintroduced");
-}
-if (!cargoManifest.includes('zip = { version = "2"')) {
-  violations.push("src-tauri/Cargo.toml: pure-Rust sidecar archive extraction dependency is missing");
-}
-
-const assistantPrompt = readFileSync("src-tauri/src/assistant/prompt.rs", "utf8");
-for (const required of ["untrusted data", "Never say a folder is safe to delete", "Never change or reinterpret risk_class"]) {
-  if (!assistantPrompt.includes(required)) {
-    violations.push(`src-tauri/src/assistant/prompt.rs: missing authority boundary "${required}"`);
-  }
+if (cargoManifest.includes("llama-cpp-2") || cargoManifest.includes('zip = { version = "2"')) {
+  violations.push("src-tauri/Cargo.toml: retired local-model runtime dependency remains");
 }
 
 const appLib = readFileSync("src-tauri/src/lib.rs", "utf8");
-for (const command of ["get_storage_assistant_status", "install_storage_assistant", "uninstall_storage_assistant", "analyze_storage_report"]) {
+for (const command of ["get_storage_assistant_status", "analyze_storage_report"]) {
   if (!appLib.includes(command)) {
     violations.push(`src-tauri/src/lib.rs: missing assistant command "${command}"`);
+  }
+}
+for (const retiredCommand of ["install_storage_assistant", "uninstall_storage_assistant"]) {
+  if (appLib.includes(retiredCommand)) {
+    violations.push(`src-tauri/src/lib.rs: retired command remains "${retiredCommand}"`);
   }
 }
 
