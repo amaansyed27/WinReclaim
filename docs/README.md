@@ -21,6 +21,7 @@ This directory documents the product, developer workflow, safety boundaries and 
 - [Rule system](rules.md) — current detection and classification guarantees.
 - [Rule authoring](rule-authoring.md) — how to add detections without creating unsafe deletion paths.
 - [Storage Assistant](storage-assistant.md) — optional local model design and authority boundary.
+- [Storage Assistant evaluation](storage-assistant-evaluation.md) — safety and quality gates for model/runtime changes.
 - [Pinned model sources](model-sources.md) — immutable model and runtime provenance.
 
 ## Developer reference
@@ -37,9 +38,11 @@ This directory documents the product, developer workflow, safety boundaries and 
 - [Release engineering](releases.md) — versioning, signing, artifacts and updater verification.
 - [Licensing](licensing.md) — MIT project licence and third-party obligations.
 - [Build Week origin](build-week.md) — project origin and development attribution.
+- [Roadmap](../ROADMAP.md) — direction, priorities and explicit non-goals.
 - [Contributing](../CONTRIBUTING.md) — contribution workflow and review expectations.
 - [Security policy](../SECURITY.md) — private vulnerability reporting.
 - [Support policy](../SUPPORT.md) — issue-reporting guidance.
+- [Code of Conduct](../CODE_OF_CONDUCT.md) — participation standards.
 - [Governance](../GOVERNANCE.md) — decision and release authority.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) — major bundled and optional components.
 - [Changelog](../CHANGELOG.md) — release history and unreleased changes.
