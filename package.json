@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "check": "npm run check:integrity && tsc --noEmit",
-    "check:integrity": "node --check landing-page/api/assistant.js && node scripts/check-generic-copy.mjs",
+    "check:integrity": "node --check landing-page/api/assistant.js && node scripts/test-assistant-proxy.mjs && node scripts/check-generic-copy.mjs",
     "version:set": "node scripts/set-version.mjs"
   },
   "dependencies": {
