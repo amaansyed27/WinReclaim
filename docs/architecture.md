@@ -2,7 +2,7 @@
 
 WinReclaim is a Windows-first Tauri 2 application organized around strict boundaries between discovery, interpretation, judgment, planning and execution.
 
-The architecture is designed so that a UI bug, model output or broad filesystem discovery cannot directly become arbitrary deletion authority.
+The architecture is designed so that a UI bug, remote model output or broad filesystem discovery cannot become arbitrary deletion authority.
 
 ## System overview
 
@@ -16,14 +16,15 @@ Rust application boundary
   ├─ bounded scanner and sizing
   ├─ deterministic rule classification
   ├─ timeline and Reclaim Passport insights
-  ├─ optional OpenAI intent constraints
+  ├─ optional privacy-bounded cloud summaries and intent constraints
   ├─ immutable cleanup planner and simulation
   ├─ compiled cleanup adapters
   ├─ measured receipts
   ├─ compressed Undo Vault and restore engine
-  ├─ optional local Storage Assistant sidecar
   └─ signed updater
 ```
+
+A separate Vercel function exposes the fixed WinReclaim cloud-assistant contract and calls OpenRouter's `openrouter/free` router. The desktop app never contains the OpenRouter credential.
 
 ## Frontend
 
@@ -34,16 +35,16 @@ Major areas:
 - `scan` — drive selection, scan profile and progress;
 - `timeline` — Storage Time Machine history and deltas;
 - `findings` — grouped findings, Reclaim Passports and selection;
+- `assistant` — optional cloud summary presentation and failure states;
 - `plan` — simulation and final confirmation;
 - `receipt` — measured execution results;
 - `vault` — restore entries and outcomes;
-- `settings` — scan defaults, data reset, assistant and application state;
-- `assistant` — optional local-model installation and advisory report;
+- `settings` — scan defaults, updates and application-data controls;
 - `update` — signed update checks and installation.
 
 The frontend is responsible for presentation and user intent. It is not trusted to define filesystem authority.
 
-Normal Tauri wrappers live in `src/lib/tauri.ts`. The frontend sends typed options, scan IDs, finding IDs, plan IDs and hashes. It does not submit arbitrary deletion paths.
+Normal Tauri wrappers live in `src/lib/tauri.ts`. The frontend sends typed options, scan IDs, finding IDs, plan IDs and hashes. It does not submit arbitrary deletion paths or provider credentials.
 
 ## Rust module map
 
@@ -51,15 +52,7 @@ The desktop backend is registered in `src-tauri/src/lib.rs`.
 
 ### `commands`
 
-The main Tauri command boundary. Commands translate frontend requests into backend operations and return serialized domain models.
-
-Responsibilities:
-
-- validate request shape;
-- coordinate application state;
-- avoid exposing internal paths unnecessarily;
-- return structured errors;
-- keep mutation authority in backend modules.
+The main Tauri command boundary. Commands validate request shape, coordinate application state, avoid exposing internal paths and keep mutation authority in backend modules.
 
 See [command-api.md](command-api.md).
 
@@ -67,7 +60,7 @@ See [command-api.md](command-api.md).
 
 Shared Rust domain types for drives, scans, findings, plans, receipts, timelines, vault entries and assistant results.
 
-Domain objects should distinguish:
+Domain objects distinguish:
 
 - measured versus estimated values;
 - safety class versus action availability;
@@ -78,138 +71,93 @@ Domain objects should distinguish:
 
 Performs bounded filesystem inspection for selected drives and scan profiles.
 
-Current responsibilities include:
-
-- known target discovery;
-- project-output discovery;
-- optional AppData and dynamic large-folder discovery;
-- Windows cache discovery;
-- size measurement;
-- cancellation and progress events;
-- reparse-point refusal;
-- limits for thresholds and unknown results;
-- exclusion of WinReclaim-owned state.
+Responsibilities include known-target discovery, project-output discovery, optional AppData and dynamic large-folder discovery, Windows cache discovery, size measurement, cancellation, progress events, reparse-point refusal and exclusion of WinReclaim-owned state.
 
 The scanner does not execute cleanup.
 
 ### `rules`
 
-Converts deterministic filesystem evidence into semantic findings.
-
-A finding can contain:
-
-- stable rule/finding identity;
-- owner and category;
-- explanation and consequence;
-- safety class;
-- evidence-based confidence;
-- optional compiled action kind.
-
-Rule data cannot contain arbitrary shell commands or deletion globs. Protected policy overrides an accidentally attached action.
+Converts deterministic filesystem evidence into semantic findings. Rule data cannot contain arbitrary shell commands or deletion globs. Protected policy overrides an accidentally attached action.
 
 See [rules.md](rules.md) and [rule-authoring.md](rule-authoring.md).
 
 ### `policy`
 
-Centralizes protected path and action policy. This layer is deliberately independent from display wording.
-
-Policy is consulted during discovery/planning and should be reapplied immediately before mutation. A more restrictive classification wins.
+Centralizes protected path and action policy. Policy is reapplied during planning and execution. A more restrictive classification wins.
 
 ### `insights`
 
-Builds derived local intelligence such as:
+Builds local derived intelligence such as Storage Time Machine snapshots, compatible scan deltas, ownership attribution, Reclaim Passports and recovery context. Insight generation cannot create executable actions.
 
-- Storage Time Machine snapshots;
-- compatible scan deltas;
-- likely ownership attribution;
-- Reclaim Passports;
-- recovery context.
+### `cloud`
 
-Insight generation cannot create executable actions.
-
-### `intent`
-
-Implements the optional remote reclaim-by-intent feature.
-
-When configured, Rust sends a constrained set of anonymized candidate metadata to the OpenAI Responses API. The model can propose target size, allowed safety classes, exclusions and explanation. A deterministic selector validates the output against the current scan.
-
-The feature cannot provide paths, commands, action kinds or plan execution.
-
-### `planner`
-
-Resolves user-selected finding IDs against backend-owned scan state.
-
-The planner:
-
-1. rejects unknown and non-actionable findings;
-2. resolves action details in Rust;
-3. aggregates estimates and recovery classes;
-4. creates a simulation;
-5. serializes an immutable plan;
-6. computes a plan hash;
-7. stores the plan in backend state.
-
-Execution requires both the plan ID and hash. The frontend cannot modify plan content after confirmation.
-
-### `actions`
-
-Contains compiled cleanup adapters.
-
-Adapters may use:
-
-- exact-root entry-by-entry filesystem cleanup;
-- generic directory cleanup with deterministic fingerprints;
-- compressed Undo Vault movement;
-- Windows Shell APIs;
-- tool-native commands started with explicit argument arrays.
-
-Adapters must revalidate current filesystem state, reject links/reparse points, enforce allowed roots and return structured results.
-
-### `vault`
-
-Implements reversible cleanup for eligible files.
-
-The vault:
-
-- creates manifest-backed entries;
-- preserves original relative paths;
-- uses bounded retention;
-- applies native NTFS compression where available;
-- never overwrites existing restore destinations;
-- reports partial restoration.
-
-### `receipts`
-
-Persists execution records under `%LOCALAPPDATA%\WinReclaim\receipts`.
-
-Receipts contain measured results and action outcomes. They are historical records and cannot be replayed as cleanup authority.
-
-### `app_data`
-
-Owns the application-data root and reset semantics.
+Implements the fixed Rust transport to:
 
 ```text
-%LOCALAPPDATA%\WinReclaim
+https://winreclaim.vercel.app/api/assistant
 ```
 
-It manages data-generation compatibility, snapshot/receipt clearing, vault preservation and model preservation. See [data-layout.md](data-layout.md).
-
-### `platform`
-
-Contains Windows-specific filesystem and storage APIs, including drive enumeration and native Shell interactions. Platform code should expose narrow safe operations to higher layers.
+It accepts only HTTPS endpoints, applies a bounded timeout, identifies the desktop client and parses the typed `{ model, result }` response. `WINRECLAIM_ASSISTANT_URL` may redirect development builds to a preview endpoint.
 
 ### `assistant` and `assistant_commands`
 
-Implement the optional local Storage Assistant.
+Build aggregate storage metadata and request an advisory summary from the cloud proxy.
 
-The installation path downloads:
+The assistant payload includes drive totals and category/risk/action counts. It excludes paths, drive labels, usernames, folder names, project names, directory trees and file contents.
 
-- a pinned Qwen3.5-2B GGUF file;
-- a pinned `llama.cpp` Windows CPU runtime archive.
+Rust validates summary length, observation count and cleanup-claim language. The report is always marked `advisoryOnly: true`.
 
-Both are verified. The runtime is safely extracted and executed as a sidecar only when the user requests analysis.
+### `intent`
 
-Assistant output is validated against the current scan and cannot change risk, action availability, selection or execution.
+Implements optional reclaim-by-intent through the same proxy. Rust sends the user sentence plus opaque executable-candidate IDs, category, size, deterministic risk and consequence.
+
+The routed model can propose only target size, allowed safety classes, exclusions and a short explanation. A deterministic selector validates the output against the current scan. The feature cannot provide paths, commands, action kinds or execution.
+
+### `planner`
+
+Resolves user-selected finding IDs against backend-owned scan state. It rejects unknown or non-actionable findings, resolves actions in Rust, creates a simulation and immutable plan, computes a plan hash and stores the plan in backend state.
+
+Execution requires both plan ID and hash. The frontend cannot modify plan content after confirmation.
+
+### `actions`
+
+Contains compiled cleanup adapters. Adapters revalidate filesystem state, reject links and reparse points, enforce allowed roots and return structured results.
+
+### `vault`
+
+Implements reversible cleanup for eligible files with manifest-backed entries, original relative paths, bounded retention, NTFS compression where available and refusal to overwrite restore destinations.
+
+### `receipts`
+
+Persists measured execution results under `%LOCALAPPDATA%\WinReclaim\receipts`. Receipts are historical records and cannot be replayed as cleanup authority.
+
+### `app_data`
+
+Owns `%LOCALAPPDATA%\WinReclaim`, data-generation compatibility, snapshot/receipt clearing and vault preservation. Version 1.2.1 also removes the retired `%LOCALAPPDATA%\WinReclaim\models\storage-assistant` directory during startup.
+
+See [data-layout.md](data-layout.md).
+
+### `platform`
+
+Contains Windows-specific filesystem and storage APIs, including drive enumeration and native Shell interactions. Platform code exposes narrow operations to higher layers.
+
+## Vercel proxy boundary
+
+`landing-page/api/assistant.js` is the only component that receives `OPENROUTER_API_KEY`.
+
+The proxy:
+
+- accepts only fixed `storage_summary` and `intent_constraints` tasks;
+- rejects malformed and oversized payloads;
+- fixes the model to `openrouter/free`;
+- requires JSON Schema output;
+- asks OpenRouter to route only to providers supporting required parameters;
+- caps candidates, categories and output tokens;
+- validates all returned fields;
+- applies a basic per-IP demo limit;
+- does not accept arbitrary prompts, models, tools or provider settings from the client.
+
+The provider credential is a Vercel environment secret, not an application secret. Distributed clients cannot securely contain a reusable provider API key.
 
 ## End-to-end scan flow
 
@@ -226,6 +174,21 @@ User selects drives/profile
   → frontend receives report and progress events
   → insights generate passports/timeline
 ```
+
+## End-to-end assistant flow
+
+```text
+User explicitly requests summary or intent help
+  → Rust reads current backend-owned scan state
+  → Rust constructs bounded anonymized metadata
+  → desktop posts to fixed WinReclaim proxy
+  → proxy validates request and calls openrouter/free
+  → proxy validates structured response
+  → Rust validates response again
+  → UI displays advisory output only
+```
+
+No remote output becomes an action, path or plan.
 
 ## End-to-end cleanup flow
 
@@ -244,7 +207,7 @@ User selects actionable finding IDs
   → vault state is refreshed
 ```
 
-At no point does the frontend submit a raw deletion path.
+At no point does the frontend or cloud model submit a raw deletion path.
 
 ## Persisted state
 
@@ -253,10 +216,9 @@ Persisted local data includes:
 - versioned scan snapshots;
 - cleanup receipts;
 - vault manifests and payloads;
-- optional model/runtime manifest and files;
 - internal data-generation marker.
 
-Persisted formats are more stable than internal command shapes because they survive upgrades. Schema changes require compatibility handling or an explicit safe invalidation policy.
+The cloud assistant does not persist a local model, runtime, prompt file or provider key.
 
 ## Network boundaries
 
@@ -265,10 +227,8 @@ Core scanning and cleanup are offline.
 Intended network activity:
 
 - GitHub Releases for signed updater metadata and installers;
-- Hugging Face for user-initiated model download;
-- GitHub Releases for user-initiated `llama.cpp` runtime download;
-- OpenAI Responses API only when the user configures and invokes reclaim-by-intent;
-- GitHub public release API from the static landing page.
+- the WinReclaim Vercel proxy and OpenRouter only after an explicit assistant action;
+- GitHub public release metadata from the landing page.
 
 See [privacy.md](privacy.md).
 
@@ -279,33 +239,21 @@ Architecture changes must preserve:
 - protected classification overrides action availability;
 - scan discovery does not imply execution authority;
 - unknown discoveries remain inspection-only by default;
-- no frontend-provided arbitrary paths;
+- no frontend- or model-provided arbitrary paths;
 - no shell command interpolation;
 - plan ID/hash verification;
 - execution-time path and fingerprint validation;
 - reparse-point refusal;
 - no vault overwrite;
 - signed updater verification;
-- advisory-only AI components;
+- advisory-only model output;
 - measured receipt results.
-
-## Extension points
-
-Safe extension points include:
-
-- new deterministic rules;
-- new compiled adapters with tests;
-- additional insight views derived from scan state;
-- new scanner backends behind the existing domain boundary;
-- persisted schema migrations;
-- improved local assistant evaluation.
-
-Potential future scanner backends include NTFS MFT enumeration and USN Change Journal updates. They must retain the same rule, policy, planner and execution boundaries.
 
 ## Related documentation
 
 - [Safety model](safety.md)
 - [Threat model](threat-model.md)
+- [Storage Assistant](storage-assistant.md)
 - [Command API](command-api.md)
 - [Rule authoring](rule-authoring.md)
 - [Testing](testing.md)

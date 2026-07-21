@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { formatBytes } from "../../lib/format";
+import { useEffect, useState } from "react";
+import { ScanIcon } from "../../components/Icons";
 import type { ScanReport } from "../../types";
 import { analyzeStorageReport, getStorageAssistantStatus } from "./assistantApi";
 import type { StorageAssistantReport, StorageAssistantStatus } from "./assistantTypes";
@@ -21,11 +21,6 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
     getStorageAssistantStatus().then(setStatus).catch((statusError) => setError(String(statusError)));
   }, [report.scanId]);
 
-  const findingById = useMemo(
-    () => new Map(report.findings.map((finding) => [finding.id, finding])),
-    [report.findings]
-  );
-
   async function analyze() {
     setLoading(true);
     setError(null);
@@ -39,43 +34,57 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
     }
   }
 
-  const installed = Boolean(status?.installed && status.verified);
+  const available = Boolean(status?.available);
 
   return (
-    <section className="surface assistant-report-panel">
+    <section className="surface assistant-report-panel" aria-busy={loading}>
       <div className="assistant-report-head">
-        <div>
-          <span className="surface-label">Optional local analysis</span>
-          <h2>Storage Assistant</h2>
-          <p>
-            Produces an OpenCode-style summary from the completed scan. Measurements, protection and cleanup actions remain deterministic.
-          </p>
+        <div className="assistant-title-group">
+          <span className="assistant-panel-icon" aria-hidden="true"><ScanIcon /></span>
+          <div>
+            <span className="surface-label">Optional cloud insight</span>
+            <h2>Storage Assistant</h2>
+            <p>Creates a short explanation from anonymized scan totals without changing any cleanup decision.</p>
+          </div>
         </div>
-        <span className={`assistant-status-pill ${installed ? "is-ready" : ""}`}>
-          {installed ? "Local model ready" : "Model not installed"}
+        <span className={`assistant-status-pill ${available ? "is-ready" : ""}`}>
+          <i aria-hidden="true" />
+          {available ? "Available" : "Unavailable"}
         </span>
       </div>
 
-      {!installed && (
-        <div className="assistant-empty-state">
-          <strong>Install the optional model from Settings</strong>
-          <span>The download is about 1.4 GB and can be removed independently later.</span>
-        </div>
-      )}
-
-      {installed && !assistantReport && (
+      {available && !assistantReport && !loading && (
         <div className="assistant-run-row">
-          <div>
-            <strong>{status?.model}</strong>
-            <span>Only scan metadata is processed locally. File contents are never sent to the model.</span>
+          <div className="assistant-model-summary">
+            <strong>{status?.provider}</strong>
+            <span>Uses {status?.model} · free routed cloud model · no API key entry required</span>
           </div>
-          <button className="button button-secondary" disabled={loading} onClick={() => void analyze()}>
-            {loading ? "Analyzing…" : "Generate storage summary"}
+          <button className="button button-primary assistant-run-button" onClick={() => void analyze()}>
+            Generate summary
           </button>
         </div>
       )}
 
-      {assistantReport && (
+      {!available && !loading && (
+        <div className="assistant-empty-state">
+          <div>
+            <strong>Cloud assistant is temporarily unavailable</strong>
+            <span>The deterministic scan and cleanup workflow still works normally.</span>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="assistant-loading-state" role="status" aria-live="polite">
+          <span className="assistant-spinner" aria-hidden="true" />
+          <div>
+            <strong>Analyzing anonymized scan metadata</strong>
+            <span>OpenRouter is selecting an available free model that supports structured output.</span>
+          </div>
+        </div>
+      )}
+
+      {assistantReport && !loading && (
         <div className="assistant-report-content">
           <div className="assistant-summary-block">
             <span>Summary</span>
@@ -84,7 +93,7 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
 
           {assistantReport.observations.length > 0 && (
             <div className="assistant-observations">
-              <span>Key observations</span>
+              <span>What stands out</span>
               <ul>
                 {assistantReport.observations.map((observation) => (
                   <li key={observation}>{observation}</li>
@@ -93,43 +102,35 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
             </div>
           )}
 
-          {assistantReport.annotations.length > 0 && (
-            <div className="assistant-annotations">
-              <div>
-                <span>Suggested labels for unclear folders</span>
-                <small>Labels are inferred and do not change cleanup classification.</small>
-              </div>
-              {assistantReport.annotations.map((annotation) => {
-                const finding = findingById.get(annotation.findingId);
-                if (!finding) return null;
-                return (
-                  <article key={annotation.findingId}>
-                    <div>
-                      <strong>{annotation.suggestedName}</strong>
-                      <span>{annotation.group} · {Math.round(annotation.confidence * 100)}% confidence</span>
-                    </div>
-                    <strong>{formatBytes(finding.estimatedBytes)}</strong>
-                    <p>{annotation.explanation}</p>
-                    <code>{finding.path}</code>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
           <div className="assistant-report-footer">
-            <span>{assistantReport.model}</span>
-            <button className="button button-secondary" disabled={loading} onClick={() => void analyze()}>
-              {loading ? "Analyzing…" : "Regenerate"}
+            <span>Routed model: {assistantReport.model}</span>
+            <button className="button button-secondary" onClick={() => void analyze()}>
+              Regenerate
             </button>
           </div>
         </div>
       )}
 
-      <p className="assistant-advisory-note">
-        Advisory only. The assistant cannot mark data safe, enable cleanup, select findings or execute deletion.
+      {error && !loading && (
+        <div className="assistant-error" role="alert">
+          <div>
+            <strong>Summary generation failed</strong>
+            <span>The scan is unaffected. Free model capacity may be busy; retry after a moment.</span>
+          </div>
+          <button className="button button-secondary" onClick={() => void analyze()} disabled={!available}>Retry</button>
+          <details>
+            <summary>Technical details</summary>
+            <code>{error}</code>
+          </details>
+        </div>
+      )}
+
+      <p className="assistant-privacy-note">
+        {status?.privacyNote ?? "Paths, usernames, folder names, project names and file contents stay local."}
       </p>
-      {error && <p className="error-banner">{error}</p>}
+      <p className="assistant-advisory-note">
+        Advisory only. The assistant cannot enable cleanup, select findings, alter safety labels or delete files.
+      </p>
     </section>
   );
 }

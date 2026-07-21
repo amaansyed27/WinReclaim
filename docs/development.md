@@ -1,138 +1,98 @@
 # Development Guide
 
-WinReclaim is a Windows-first Tauri 2 desktop application with a React/TypeScript frontend and Rust backend.
+WinReclaim is a Windows-first Tauri 2 desktop application with a React/TypeScript frontend, Rust backend and an optional Vercel/OpenRouter explanation layer.
 
 ## Supported development platform
 
-The primary supported environment is Windows 11 x64 using PowerShell.
+Primary environment: Windows 11 x64 with PowerShell.
 
 Required software:
 
-- Git
-- Node.js 22 or newer
-- npm
-- Rust 1.88 or newer
-- Rust target `x86_64-pc-windows-msvc`
-- Visual Studio Build Tools with **Desktop development with C++**
-- Windows 10/11 SDK
-- WebView2 Runtime
+- Git;
+- Node.js 22 or newer and npm;
+- Rust 1.88 or newer with `x86_64-pc-windows-msvc`;
+- Visual Studio Build Tools with **Desktop development with C++**;
+- Windows 10/11 SDK;
+- WebView2 Runtime.
 
-Recommended tools:
+Recommended: Visual Studio Code, rust-analyzer and GitHub CLI.
 
-- Visual Studio Code
-- rust-analyzer
-- ESLint/TypeScript language support
-- GitHub CLI for release diagnostics
-
-## Clone and install
+## Clone and run
 
 ```powershell
 git clone https://github.com/amaansyed27/WinReclaim.git
 cd WinReclaim
 npm ci
-```
-
-Confirm the toolchain:
-
-```powershell
-node --version
-npm --version
-rustc --version
-cargo --version
-rustup show active-toolchain
-```
-
-The Rust toolchain should resolve to MSVC on Windows. Install the expected target if necessary:
-
-```powershell
 rustup target add x86_64-pc-windows-msvc
 rustup component add rustfmt clippy
-```
-
-## Run the application
-
-```powershell
 npm run tauri dev
 ```
 
-This starts Vite on the configured local development URL and launches the Tauri application. The browser frontend alone cannot execute scans because the typed commands require the Rust process.
-
-Frontend-only preview:
+Frontend-only layout preview:
 
 ```powershell
 npm run dev
 ```
 
-Use frontend-only mode for layout work, but expect Tauri calls to fail unless they are guarded by development fixtures.
+The browser preview cannot execute scans because Tauri commands require the Rust process.
 
 ## Project layout
 
 ```text
 WinReclaim/
 ├─ src/                         React and TypeScript frontend
-│  ├─ components/              Shared application shell components
-│  ├─ features/                Scan, findings, plan, receipt, vault, settings,
-│  │                           timeline, updater and assistant features
-│  ├─ lib/                     Typed Tauri client and presentation helpers
-│  └─ types.ts                 Shared frontend domain types
+│  ├─ components/              Shared application shell
+│  ├─ features/                Scan, findings, assistant, plan, receipt,
+│  │                           vault, settings, timeline and updater
+│  ├─ lib/                     Typed Tauri clients and helpers
+│  └─ types.ts                 Frontend domain types
 ├─ src-tauri/
 │  ├─ src/
 │  │  ├─ actions/              Compiled cleanup adapters
-│  │  ├─ assistant/            Optional local assistant download and inference
+│  │  ├─ assistant/            Aggregate cloud-summary boundary
+│  │  ├─ cloud.rs              Fixed HTTPS proxy transport
 │  │  ├─ commands/             Tauri command boundary
 │  │  ├─ domain/               Rust domain models
-│  │  ├─ insights/             Timeline and Reclaim Passport logic
-│  │  ├─ intent/               Optional OpenAI intent interpretation
-│  │  ├─ planner/              Immutable cleanup plan creation
+│  │  ├─ insights/             Timeline and Reclaim Passports
+│  │  ├─ intent/               OpenRouter-backed intent constraints
+│  │  ├─ planner/              Immutable hashed cleanup plans
 │  │  ├─ platform/             Windows-specific APIs
-│  │  ├─ policy.rs             Protected-path and safety policy
-│  │  ├─ receipts/             Execution record persistence
-│  │  ├─ rules/                Deterministic storage classification
-│  │  ├─ scanner/              Bounded storage discovery and sizing
+│  │  ├─ policy.rs             Protected-path policy
+│  │  ├─ receipts/             Measured execution records
+│  │  ├─ rules/                Deterministic classification
+│  │  ├─ scanner/              Bounded discovery and sizing
 │  │  ├─ storage/              In-process application state
-│  │  └─ vault/                Reversible cleanup and restoration
-│  ├─ tauri.conf.json          Desktop, bundle and updater configuration
-│  └─ Cargo.toml               Rust dependencies and release profile
-├─ scripts/                    Repository integrity and version scripts
-├─ docs/                       Product and developer documentation
-├─ landing-page/               Static Vercel-ready product site
+│  │  └─ vault/                Reversible cleanup and restore
+│  ├─ tauri.conf.json
+│  └─ Cargo.toml
+├─ landing-page/
+│  ├─ api/assistant.js         Vercel proxy for OpenRouter
+│  └─ ...                      Static product site
+├─ scripts/                    Integrity and version scripts
+├─ docs/                       Product/developer documentation
 └─ .github/workflows/          CI and Windows release automation
 ```
 
-## Frontend workflow
-
-Type checking and integrity checks:
+## Frontend checks
 
 ```powershell
 npm run check
-```
-
-Production build:
-
-```powershell
 npm run build
 ```
 
-The `check:integrity` script enforces product-specific constraints. Do not bypass it to make CI green; update implementation and tests together when a legitimate contract changes.
+`check:integrity` enforces product safety and architecture contracts. Do not bypass it to make CI pass.
 
-### Tauri calls
+Frontend rules:
 
-Keep normal application commands centralized in `src/lib/tauri.ts`. Feature-specific APIs may live beside a feature when they have their own domain types, as with the Storage Assistant.
-
-Frontend code should:
-
-- submit stable IDs and typed request objects;
-- avoid constructing filesystem paths for execution;
-- preserve backend error messages in a user-safe form;
-- unsubscribe from Tauri events during cleanup;
+- submit typed IDs and request objects, not deletion paths;
+- keep credentials out of React state and built JavaScript;
 - distinguish estimated and measured values;
-- show consequences before destructive actions.
+- preserve explicit loading/failure states for optional cloud features;
+- show cleanup consequences before confirmation.
 
 See [command-api.md](command-api.md).
 
-## Rust workflow
-
-Run commands from the repository root:
+## Rust checks
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all
@@ -141,67 +101,65 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-Useful focused tests:
+Focused tests:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml scanner
 cargo test --manifest-path src-tauri/Cargo.toml planner
 cargo test --manifest-path src-tauri/Cargo.toml vault
 cargo test --manifest-path src-tauri/Cargo.toml assistant
+cargo test --manifest-path src-tauri/Cargo.toml intent
 ```
 
-### Error handling
+Before filesystem mutation, Rust must resolve backend-owned state, verify the plan hash, revalidate current evidence, reject links/reparse points and protected overlaps, and measure results for the receipt.
 
-- Tauri command handlers should return structured failures rather than panic.
-- Filesystem errors should include enough context to diagnose the target category without leaking unnecessary user data to remote services.
-- Locked or inaccessible files are normally skipped and reflected in results rather than forcefully removed.
-- Integer storage calculations should use checked or saturating arithmetic.
+## Optional cloud assistant
 
-### Filesystem mutation
+The desktop application does not read `OPENROUTER_API_KEY`. It calls the public WinReclaim proxy:
 
-Before mutating a path:
+```text
+https://winreclaim.vercel.app/api/assistant
+```
 
-1. resolve the action from backend-owned state;
-2. verify the plan ID and hash when applicable;
-3. confirm the current path still matches the rule/action contract;
-4. reject reparse points and symbolic links;
-5. canonicalize and validate the allowed root;
-6. avoid crossing filesystem or trust boundaries unexpectedly;
-7. measure the result for the receipt.
-
-## Optional OpenAI intent feature
-
-Set the key only in the process environment:
+For a Vercel preview deployment:
 
 ```powershell
-$env:OPENAI_API_KEY="your-key"
-$env:OPENAI_MODEL="gpt-5.6" # optional override
+$env:WINRECLAIM_ASSISTANT_URL="https://your-preview-domain.vercel.app/api/assistant"
 npm run tauri dev
 ```
 
-The key must not be stored in frontend state, committed files or screenshots. The feature remains optional; all deterministic scan and cleanup functionality works without it.
+The override must use HTTPS.
 
-## Optional local Storage Assistant
+### Run the proxy
 
-The local assistant is installed from the application's Settings page. Development builds download a pinned Qwen GGUF model and a pinned `llama.cpp` Windows CPU sidecar. Both artifacts are verified before use.
+From `landing-page`:
 
-Developers should not replace pinned URLs or hashes without updating:
+```powershell
+vercel link --project winreclaim
+vercel env add OPENROUTER_API_KEY preview
+vercel env add OPENROUTER_API_KEY production
+vercel dev
+```
 
-- `src-tauri/src/assistant/mod.rs`;
-- download verification tests;
-- [model-sources.md](model-sources.md);
-- [storage-assistant.md](storage-assistant.md);
-- [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Enter the key only in Vercel's interactive secret prompt. Never put it in source, a committed `.env`, frontend code, Rust constants, screenshots or logs.
+
+The proxy supports only fixed `storage_summary` and `intent_constraints` tasks, fixes the model to `openrouter/free`, requires structured JSON output and validates requests/responses.
+
+### Privacy contract
+
+Storage summaries may send aggregate drive totals and category/risk/action counts. Intent requests may send the user's sentence plus opaque candidate IDs, category, size, deterministic risk and generic consequence.
+
+Do not add paths, drive labels, usernames, folder names, project names, directory trees or file contents to a cloud payload.
+
+See [privacy.md](privacy.md), [storage-assistant.md](storage-assistant.md) and [threat-model.md](threat-model.md).
 
 ## Local application data
-
-WinReclaim writes owned state below:
 
 ```text
 %LOCALAPPDATA%\WinReclaim
 ```
 
-Use the Settings reset controls where possible. For isolated development testing, back up any needed vault data before removing the directory manually. See [data-layout.md](data-layout.md).
+Use Settings reset controls where possible. Version 1.2.1 removes the retired local-assistant model directory during startup. See [data-layout.md](data-layout.md).
 
 ## Build installers locally
 
@@ -209,49 +167,46 @@ Use the Settings reset controls where possible. For isolated development testing
 npm run tauri build
 ```
 
-Expected output is below `src-tauri\target\release\bundle` for the default target, or the target-specific directory when `--target` is supplied.
-
-Local builds may not have updater signatures unless `TAURI_SIGNING_PRIVATE_KEY` is set. Never use the production private signing key on an untrusted machine.
+Bundles appear under `src-tauri\target\release\bundle` or the target-specific directory. Local builds may not contain updater signatures unless `TAURI_SIGNING_PRIVATE_KEY` is set. Never use the production signing key on an untrusted machine.
 
 ## Version synchronization
-
-The application version is stored in multiple manifests. Use:
 
 ```powershell
 npm run version:set -- 1.2.3
 ```
 
-This updates the package and Tauri/Cargo manifests managed by the script. Official releases perform version synchronization through GitHub Actions; do not manually create the release tag first.
+Official releases perform synchronization and tagging through GitHub Actions. Do not create the release tag manually first.
 
-## Working with the landing page
+## Landing page
+
+Static preview:
 
 ```powershell
 cd landing-page
 python -m http.server 4173
 ```
 
-Open `http://localhost:4173`. The landing page is dependency-free and retrieves the latest public GitHub Release metadata in the browser.
+Vercel preview including the serverless route:
 
-## Debugging tips
+```powershell
+cd landing-page
+vercel dev
+```
 
-Enable Rust backtraces for a development session:
+## Debugging
 
 ```powershell
 $env:RUST_BACKTRACE="1"
 npm run tauri dev
 ```
 
-Run the frontend with full TypeScript diagnostics:
-
 ```powershell
 npx tsc --noEmit --pretty false
 ```
-
-Inspect the Windows release bundle tree:
 
 ```powershell
 Get-ChildItem .\src-tauri\target -Recurse -File |
   Where-Object { $_.Extension -in '.exe', '.msi', '.sig' }
 ```
 
-See [troubleshooting.md](troubleshooting.md) for common toolchain and runtime failures.
+See [testing.md](testing.md) and [troubleshooting.md](troubleshooting.md).

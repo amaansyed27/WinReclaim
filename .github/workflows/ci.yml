@@ -36,7 +36,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        shell: pwsh
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check 2>&1 | Tee-Object -FilePath cargo-fmt.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check Rust
         shell: pwsh
@@ -62,6 +65,7 @@ jobs:
         with:
           name: validation-diagnostics
           path: |
+            cargo-fmt.log
             cargo-check.log
             cargo-test.log
             cargo-clippy.log

@@ -1,109 +1,110 @@
 # Security Policy
 
-WinReclaim scans storage and can execute narrowly scoped cleanup actions. Vulnerabilities that bypass path validation, plan integrity, updater verification or protected-data boundaries are treated as high priority.
+WinReclaim scans storage and can execute narrowly scoped cleanup actions. Vulnerabilities that bypass path validation, plan integrity, updater verification, privacy boundaries or protected-data policy are high priority.
 
 ## Supported versions
 
-Security fixes are applied to:
-
-- the latest published stable release;
-- the current `main` branch when the issue affects unreleased code.
-
-Older releases may not receive backports. Users should keep WinReclaim updated through the signed updater or the latest GitHub Release.
+Security fixes target the latest stable release and current `main` when relevant. Older releases may not receive backports. Update through the signed updater or official GitHub Release.
 
 ## Reporting a vulnerability
 
-Do not open a public issue containing exploit details, private paths, signing material or proof-of-concept code.
+Do not open a public issue containing exploit details, private paths, credentials, signing material or proof-of-concept code.
 
-Preferred reporting method:
+Preferred method:
 
 1. Open the repository **Security** tab.
-2. Select **Report a vulnerability** to use GitHub private vulnerability reporting.
-3. Include the affected version or commit, reproduction steps, expected impact and any suggested mitigation.
+2. Select **Report a vulnerability**.
+3. Include the affected version/commit, reproduction steps, impact and suggested mitigation.
 
-If private vulnerability reporting is unavailable, open a minimal public issue asking the maintainer to establish a private channel. Do not include technical details in that issue.
+When private reporting is unavailable, open only a minimal public request for a private channel.
 
 Never send or commit:
 
-- `TAURI_SIGNING_PRIVATE_KEY`;
-- updater private-key backups;
-- OpenAI API keys;
-- personal filesystem paths or scan exports containing sensitive names;
-- access tokens or credentials discovered in logs.
+- `TAURI_SIGNING_PRIVATE_KEY` or backups;
+- `OPENROUTER_API_KEY`;
+- Vercel access tokens or environment exports;
+- personal paths, raw scan exports or vault data;
+- access tokens or credentials from logs.
+
+A suspected OpenRouter-key exposure should be reported privately and the key rotated immediately.
 
 ## Useful report contents
 
-A useful report includes:
+Include:
 
-- affected WinReclaim version or commit SHA;
-- Windows version and architecture;
-- whether the issue occurs during scan, planning, cleanup, restore, model installation or update;
-- the smallest reproducible test case;
-- whether reparse points, junctions, locked files or path races are involved;
+- affected version or commit;
+- Windows version/architecture;
+- whether the issue affects scan, planning, cleanup, restore, cloud proxy or update;
+- smallest reproducible case;
+- involvement of links, junctions, locked files or races;
 - whether user interaction is required;
-- potential impact on confidentiality, integrity or availability;
-- sanitized logs with usernames and paths removed.
+- confidentiality/integrity/availability impact;
+- sanitized logs with names and paths removed.
 
 ## Security-sensitive areas
 
 Reports are especially valuable for:
 
-- arbitrary path deletion or traversal;
-- reparse-point, symlink or junction bypasses;
-- time-of-check/time-of-use path substitution;
+- arbitrary deletion, traversal or reparse bypass;
+- time-of-check/time-of-use substitution;
 - protected findings becoming executable;
-- cleanup-plan hash or state bypasses;
-- shell or command injection;
+- plan-hash/state bypass;
+- shell/command injection;
 - unsafe external command resolution;
-- vault restore overwrites or path escapes;
-- malicious snapshot, receipt or manifest parsing;
-- model or runtime download verification bypasses;
-- updater signature or endpoint bypasses;
-- leakage of paths, filenames or API keys to remote services;
-- prompt-injection paths that influence executable cleanup behaviour;
-- privilege-boundary mistakes involving Windows system directories.
+- vault overwrite or path escape;
+- malicious persisted-data parsing;
+- updater signature/endpoint bypass;
+- OpenRouter or updater credential exposure;
+- cloud payloads containing paths, drive labels, usernames, folder/file names, project names, directory trees or contents;
+- proxy bypass allowing arbitrary models, prompts, tools or provider options;
+- unknown candidate IDs/classes accepted from remote output;
+- cloud output influencing executable cleanup;
+- rate-limit or cost-exhaustion vulnerabilities;
+- privilege mistakes involving Windows system directories.
 
 ## Response process
 
-The project uses a best-effort process:
+Best effort:
 
-1. acknowledge receipt;
+1. acknowledge;
 2. reproduce and assess severity;
-3. prepare a fix and regression tests;
+3. fix with regression tests;
 4. coordinate disclosure when appropriate;
-5. publish a signed release;
-6. document impact and remediation without exposing users unnecessarily.
-
-Complex reports may take longer to validate, particularly when Windows filesystem behaviour differs across versions.
+5. rotate affected credentials;
+6. publish a signed release;
+7. document impact/remediation safely.
 
 ## Security design principles
 
-WinReclaim is designed around the following controls:
-
 - deterministic scanning and classification;
-- typed Tauri commands;
-- stable IDs instead of frontend-supplied deletion paths;
-- immutable hashed cleanup plans;
-- compiled allowlisted action adapters;
-- canonical path and root validation before mutation;
-- refusal to follow reparse points;
-- measured receipts;
-- local-first data storage;
-- signed updater artifacts;
-- SHA-256 verification for optional model/runtime downloads;
-- advisory-only AI components with no execution authority.
+- typed Tauri commands and backend-owned state;
+- IDs instead of frontend/model-supplied deletion paths;
+- immutable hashed plans;
+- compiled allowlisted adapters;
+- canonical/root validation before mutation;
+- reparse-point refusal;
+- measured receipts and no-overwrite restore;
+- local-first persisted data;
+- optional privacy-minimized cloud requests;
+- provider credential stored only in Vercel;
+- fixed proxy tasks/model router and structured-output validation;
+- advisory-only remote output;
+- signed updater artifacts.
 
-See [docs/safety.md](docs/safety.md) and [docs/threat-model.md](docs/threat-model.md) for the detailed model.
+Current releases do not bundle or download a local AI model.
+
+See [docs/safety.md](docs/safety.md), [docs/privacy.md](docs/privacy.md) and [docs/threat-model.md](docs/threat-model.md).
 
 ## Out of scope
 
-The following are generally not security vulnerabilities unless they cross a trust boundary:
+Generally not vulnerabilities unless they cross a trust boundary:
 
-- inaccurate reclaim estimates that are clearly labelled estimates;
-- files skipped because they are locked or inaccessible;
-- SmartScreen warnings on unsigned Authenticode installers;
-- denial of service requiring manual modification of WinReclaim's own local data;
-- issues in unsupported Windows versions;
-- social engineering unrelated to repository code or official release assets.
+- clearly labelled estimate inaccuracies;
+- locked/inaccessible files being skipped;
+- temporary free-router unavailability;
+- SmartScreen warnings without Authenticode reputation;
+- denial of service requiring manual corruption of local WinReclaim data;
+- unsupported Windows configurations;
+- unrelated social engineering.
 
-This policy does not promise a bug bounty or monetary reward.
+No bug bounty or monetary reward is promised.

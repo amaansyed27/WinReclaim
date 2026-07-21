@@ -7,15 +7,16 @@ WinReclaim is local-first. Scanning, classification, snapshots, planning, cleanu
 WinReclaim does not intentionally upload:
 
 - filesystem paths;
+- drive roots or labels;
 - usernames;
+- folder or file names;
 - project names;
 - directory trees;
 - file contents;
 - scan snapshots;
 - cleanup plans;
 - receipts;
-- vault payloads;
-- Storage Assistant prompts or outputs.
+- vault payloads.
 
 No product telemetry or analytics service is included in the desktop application.
 
@@ -29,59 +30,69 @@ WinReclaim checks the configured GitHub Releases endpoint for `latest.json` and 
 
 The update request does not include scan results or application-data contents.
 
-### Optional local Storage Assistant installation
+### Optional OpenRouter cloud assistance
 
-When the user chooses to install the Storage Assistant, WinReclaim downloads:
+When the user explicitly requests a Storage Assistant summary or reclaim-by-intent suggestion, the Rust backend sends bounded metadata to the WinReclaim server-side proxy:
 
-- a pinned GGUF model from a fixed Hugging Face revision;
-- a pinned Windows CPU runtime from an upstream `llama.cpp` GitHub Release.
+```text
+https://winreclaim.vercel.app/api/assistant
+```
 
-The files are verified before use. Local inference does not contact the model or runtime provider.
+The proxy stores the OpenRouter credential as a server-side Vercel environment secret and requests the `openrouter/free` router. The provider key is not included in the desktop binary, source code, webview or request payload.
 
-See [model-sources.md](model-sources.md).
+A storage-summary request may contain:
 
-### Optional OpenAI reclaim-by-intent
+- aggregate used, free and total bytes;
+- drive count;
+- scanned and skipped entry counts;
+- category names;
+- reported bytes and location counts per category;
+- actionable location counts;
+- counts by deterministic risk class;
+- an overlap warning for category rows.
 
-When `OPENAI_API_KEY` is configured and the user invokes reclaim-by-intent, the Rust backend sends a constrained request to the OpenAI Responses API.
+A reclaim-by-intent request may additionally contain:
 
-The request may contain:
+- the user's intent sentence;
+- backend-generated opaque candidate IDs;
+- candidate category;
+- measured size;
+- deterministic risk class;
+- deterministic recovery consequence.
 
-- backend-generated candidate IDs;
-- product/category labels;
-- estimated sizes;
-- safety classes;
-- recovery consequences;
-- the user's intent sentence.
+These requests must not contain:
 
-The request must not contain:
-
-- absolute or relative filesystem paths;
+- filesystem paths;
+- drive roots or labels;
 - usernames;
+- folder or file names;
 - project names;
 - directory trees;
 - file contents;
 - arbitrary cleanup commands;
-- API keys in model input.
+- provider API keys.
 
-Response storage is disabled by the application request. The API key remains in the Rust process environment and is never exposed to the webview.
+The proxy accepts only fixed assistant tasks, validates request size and shape, constrains output with JSON Schema and validates returned fields. The routed model name is returned for transparency. OpenRouter free-model availability and limits can vary.
 
-The feature is optional. Manual scanning, review, planning, cleanup, timeline, receipts and vault operation remain available without an API key.
+The feature is optional. Manual scanning, review, planning, cleanup, timeline, receipts and vault operation remain available when the proxy or free-model capacity is unavailable.
 
-## Storage Assistant privacy boundary
+## Storage Assistant authority boundary
 
-The optional local model receives structured information from the completed scan report and runs through a local verified sidecar process. It does not independently traverse the filesystem or read file contents.
+Remote output is advisory. It cannot independently traverse the filesystem, access local paths, add cleanup targets, change safety classes, create a plan, execute cleanup or restore data.
 
-Paths and folder labels supplied to the local prompt are treated as untrusted data. Generated output remains advisory and cannot enable cleanup actions.
+Rust remains authoritative for IDs, measured values, risk classes, action availability and cleanup execution. Unsafe cleanup claims are rejected before display.
 
-## Landing page
+See [storage-assistant.md](storage-assistant.md).
 
-The static landing page may request public release metadata from the GitHub API to resolve the newest installer links. It does not receive desktop application data.
+## Landing page and proxy hosting
 
-Vercel or another site host may process ordinary web request metadata according to the host's own policy. This is separate from the WinReclaim desktop application's local data.
+The landing page may request public release metadata from the GitHub API to resolve the newest installer links. It does not receive desktop application data.
+
+The `/api/assistant` route is a serverless proxy for explicit assistant requests. Vercel and OpenRouter may process ordinary request metadata and the bounded fields described above according to their respective policies. No desktop telemetry is sent through this route.
 
 ## Logs and issue reports
 
-Logs and screenshots can reveal private folder names even when the application itself does not upload them. Before sharing diagnostics:
+Logs and screenshots can reveal private folder names even when the application does not upload them. Before sharing diagnostics:
 
 - replace the Windows username;
 - redact drive labels and project names;
@@ -95,8 +106,8 @@ Logs and screenshots can reveal private folder names even when the application i
 - snapshots use bounded local retention;
 - vault entries have a limited restore window;
 - receipts remain until removed through Settings or manual deletion;
-- optional model/runtime files remain until uninstalled;
-- environment-provided API keys are not persisted by WinReclaim.
+- retired local-model files are removed by version 1.2.1 during startup;
+- provider API keys are not persisted by the WinReclaim desktop application.
 
 See [data-layout.md](data-layout.md) for exact locations and reset behaviour.
 
@@ -104,20 +115,20 @@ See [data-layout.md](data-layout.md) for exact locations and reset behaviour.
 
 Optional network features are subject to the policies and terms of their providers:
 
-- GitHub for releases and runtime artifacts;
-- Hugging Face for the optional model artifact;
-- OpenAI for optional reclaim-by-intent requests;
-- the landing-page host for normal web access.
+- GitHub for releases and updater artifacts;
+- Vercel for landing-page and proxy hosting;
+- OpenRouter and its routed providers for explicit assistant requests.
 
 WinReclaim is not affiliated with or endorsed by those providers.
 
 ## Privacy-impacting changes
 
-A contribution that introduces a new network request, telemetry, crash reporting, remote storage or new model provider must:
+A contribution that introduces a new network request, telemetry, crash reporting, remote storage or model provider must:
 
 1. be opt-in unless required for an explicit user action;
 2. document the exact transmitted fields;
-3. avoid filesystem paths and file contents by default;
+3. avoid filesystem paths, names and file contents by default;
 4. expose failure without blocking local core functionality;
-5. update this document, the threat model and the changelog;
-6. receive explicit maintainer review.
+5. keep provider credentials outside distributed clients;
+6. update this document, the threat model and the changelog;
+7. receive explicit maintainer review.

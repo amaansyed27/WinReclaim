@@ -24,13 +24,13 @@ WinReclaim answers six practical questions:
 5. What will removal cost to restore, rebuild or redownload?
 6. Can the cleanup be reversed?
 
-It is not a registry cleaner, generic PC optimizer, debloater or AI-controlled deletion agent. Scanning and cleanup authority live in inspectable Rust code. Optional AI features remain advisory.
+It is not a registry cleaner, generic PC optimizer, debloater or AI-controlled deletion agent. Scanning and cleanup authority live in inspectable Rust code. Optional model output remains advisory.
 
 ## Why it exists
 
-WinReclaim began with a real Windows storage investigation. A commonly suspected application used only a small fraction of the missing space. The larger contributors were local AI models, Android development data, Hugging Face cache, Docker data, Gradle, npm and generated project output.
+WinReclaim began with a real Windows storage investigation. A commonly suspected application used only a small fraction of the missing space. The larger contributors were local model stores, Android development data, package caches, container data and generated project output.
 
-A targeted cleanup reclaimed substantial space without deleting projects or Ollama models. WinReclaim turns that investigation into a repeatable product with evidence, consequence labels, confirmation and receipts.
+A targeted cleanup reclaimed substantial space without deleting projects or protected model stores. WinReclaim turns that investigation into a repeatable product with evidence, consequence labels, confirmation and receipts.
 
 Read the full [Build Week origin](docs/build-week.md).
 
@@ -186,49 +186,28 @@ Non-negotiable controls:
 
 Read [Safety model](docs/safety.md) and [Threat model](docs/threat-model.md).
 
-## Optional intelligence
+## Optional cloud intelligence
 
-### Local Storage Assistant
+WinReclaim uses OpenRouter's `openrouter/free` router for two explicitly requested advisory features:
 
-The optional Storage Assistant uses:
+- **Storage Assistant** — summarizes aggregate storage totals and deterministic category/risk counts;
+- **Reclaim by intent** — translates a natural-language preference into conservative constraints over existing executable candidates.
 
-- `Qwen/Qwen3.5-2B`;
-- `Q4_K_M` GGUF quantization;
-- a pinned Windows x64 CPU `llama.cpp` sidecar;
-- local, on-demand inference.
+The desktop application does not contain or request an API key. It calls the WinReclaim server-side proxy at:
 
-The model and runtime are downloaded only after confirmation and verified before use. The normal application build does not compile or embed `llama.cpp` bindings.
-
-The assistant can summarize a completed scan and suggest clearer names for ambiguous findings. It cannot change risk, action availability, selection, plans or execution.
-
-Read [Storage Assistant](docs/storage-assistant.md) and [Pinned sources](docs/model-sources.md).
-
-### Reclaim by intent with GPT-5.6
-
-When a user explicitly provides `OPENAI_API_KEY`, WinReclaim can translate a request such as:
-
-> Free around 20 GB, but do not touch Ollama, browser profiles or Android emulators.
-
-into conservative constraints:
-
-- target reclaim size;
-- allowed safety classes;
-- explicit exclusions;
-- short explanation.
-
-The request is designed not to include filesystem paths, usernames, project names, directory trees or file contents. Rust validates all returned IDs/classes and applies the result only as an editable selection suggestion.
-
-The model cannot return commands, add cleanup targets, create a plan or execute deletion.
-
-Configure for development:
-
-```powershell
-$env:OPENAI_API_KEY="your-key"
-$env:OPENAI_MODEL="gpt-5.6" # optional override
-npm run tauri dev
+```text
+https://winreclaim.vercel.app/api/assistant
 ```
 
-All core features remain available without an API key.
+The OpenRouter credential is stored only as a Vercel environment secret. Judges and normal users can test the feature without entering a key.
+
+Storage summaries send aggregate totals and category/risk/action counts. Reclaim-by-intent sends the user's sentence plus opaque candidate IDs, category, size, risk class and recovery consequence. Neither request sends paths, drive labels, usernames, folder names, project names, directory trees or file contents.
+
+The proxy fixes the model to `openrouter/free`, requires structured JSON output, validates request and response shapes and applies a demo rate limit. Rust independently validates returned IDs and safety classes. Remote output cannot create cleanup targets, change risk, create plans, run commands or execute deletion.
+
+Free model availability can vary. All scanning, review, planning, cleanup, history, receipts and restore features remain available when the cloud assistant is unavailable.
+
+Read [Storage Assistant](docs/storage-assistant.md) and [Privacy](docs/privacy.md).
 
 ## Privacy
 
@@ -242,16 +221,15 @@ Local operations:
 - Reclaim Passports;
 - planning and simulation;
 - cleanup and receipts;
-- Undo Vault and restore;
-- optional Storage Assistant inference.
+- Undo Vault and restore.
 
 Intended network access is limited to:
 
 - GitHub Releases for signed application updates;
-- user-initiated model download from a pinned Hugging Face revision;
-- user-initiated runtime download from a pinned `llama.cpp` GitHub Release;
-- optional OpenAI reclaim-by-intent requests;
-- public GitHub release metadata used by the static landing page.
+- explicit advisory requests to the WinReclaim Vercel proxy and OpenRouter;
+- public GitHub release metadata used by the landing page.
+
+The previous local Qwen/`llama.cpp` assistant was removed. Version 1.2.1 automatically deletes its retired directory at startup.
 
 Read [Privacy and network access](docs/privacy.md) and [Local data layout](docs/data-layout.md).
 
@@ -305,6 +283,13 @@ Local installer build:
 npm run tauri build
 ```
 
+The desktop app targets the production proxy by default. To test a preview deployment:
+
+```powershell
+$env:WINRECLAIM_ASSISTANT_URL="https://your-preview-domain.vercel.app/api/assistant"
+npm run tauri dev
+```
+
 Read the [Development guide](docs/development.md) and [Testing guide](docs/testing.md).
 
 ## Architecture
@@ -316,12 +301,11 @@ React desktop UI
       ├─ bounded scanner
       ├─ deterministic rules and protected policy
       ├─ timeline and Reclaim Passports
-      ├─ optional GPT intent constraints
+      ├─ optional privacy-bounded OpenRouter constraints and summaries
       ├─ immutable planner and simulation
       ├─ compiled cleanup adapters
       ├─ compressed Undo Vault
       ├─ measured receipts
-      ├─ optional verified local-model sidecar
       └─ signed updater
 ```
 
@@ -360,6 +344,6 @@ Read [Architecture](docs/architecture.md) and [Command API](docs/command-api.md)
 
 WinReclaim is released under the [MIT License](LICENSE).
 
-Third-party dependencies and optional model/runtime components retain their upstream licences. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licensing.md](docs/licensing.md).
+Third-party dependencies and cloud providers retain their upstream licences and terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licensing.md](docs/licensing.md).
 
-OpenAI, GPT, Qwen, GitHub, Hugging Face, Windows and other product names are trademarks of their respective owners. Their mention does not imply endorsement.
+OpenAI, GPT, OpenRouter, GitHub, Vercel, Windows and other product names are trademarks of their respective owners. Their mention does not imply endorsement.

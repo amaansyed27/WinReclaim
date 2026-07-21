@@ -18,14 +18,13 @@ This directory documents the product, developer workflow, safety boundaries and 
 
 - [FAQ](faq.md) — common product, privacy and recovery questions.
 - [Installation and updating](installation.md) — official installers, update verification and clean reinstall.
-- [Data layout and lifecycle](data-layout.md) — snapshots, receipts, vault entries, model files and reset behaviour.
+- [Data layout and lifecycle](data-layout.md) — snapshots, receipts, vault entries and reset behaviour.
 - [Privacy and network access](privacy.md) — local data and every intended outbound connection.
 - [Accessibility](accessibility.md) — keyboard, screen-reader, scaling and safety communication requirements.
 - [Rule system](rules.md) — current detection and classification guarantees.
 - [Rule authoring](rule-authoring.md) — how to add detections without creating unsafe deletion paths.
-- [Storage Assistant](storage-assistant.md) — optional local model design and authority boundary.
-- [Storage Assistant evaluation](storage-assistant-evaluation.md) — safety and quality gates for model/runtime changes.
-- [Pinned model sources](model-sources.md) — immutable model and runtime provenance.
+- [Storage Assistant](storage-assistant.md) — OpenRouter proxy design, transmitted fields and authority boundary.
+- [Storage Assistant evaluation](storage-assistant-evaluation.md) — safety and quality gates for routed model output.
 
 ## Developer reference
 
@@ -48,7 +47,7 @@ This directory documents the product, developer workflow, safety boundaries and 
 - [Support policy](../SUPPORT.md) — issue-reporting guidance.
 - [Code of Conduct](../CODE_OF_CONDUCT.md) — participation standards.
 - [Governance](../GOVERNANCE.md) — decision and release authority.
-- [Third-party notices](../THIRD_PARTY_NOTICES.md) — major bundled and optional components.
+- [Third-party notices](../THIRD_PARTY_NOTICES.md) — major bundled components and cloud services.
 - [Changelog](../CHANGELOG.md) — release history and unreleased changes.
 
 ## Documentation standards

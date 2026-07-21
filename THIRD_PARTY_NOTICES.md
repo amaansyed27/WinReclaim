@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-WinReclaim is licensed under the MIT License. It also depends on third-party software and can optionally download third-party model/runtime artifacts. Those components remain subject to their own licences.
+WinReclaim is licensed under the MIT License and depends on third-party software and optional cloud services. Those components and services remain subject to their own licences and terms.
 
-This document is a practical summary, not a replacement for the licence text shipped by each dependency. `package-lock.json`, `src-tauri/Cargo.lock`, the relevant upstream repositories and downloaded artifact metadata are the authoritative dependency inventory.
+This document is a practical summary, not a replacement for upstream licence text. `package-lock.json`, `src-tauri/Cargo.lock` and the relevant upstream repositories are the authoritative dependency inventory.
 
 ## Application dependencies
 
@@ -19,42 +19,47 @@ Major direct dependencies include:
 
 Transitive dependencies may use other permissive licences. Binary distributors are responsible for reviewing the complete locked dependency graph for their distribution requirements.
 
-## Optional Storage Assistant
+## Optional cloud assistance
 
-The Storage Assistant is not required for WinReclaim's deterministic scan and cleanup workflow.
+The Storage Assistant and reclaim-by-intent features use:
 
-When installed by the user, WinReclaim downloads:
-
-| Component | Source | Licence |
+| Service | Purpose | Terms |
 | --- | --- | --- |
-| Qwen3.5-2B GGUF model | Pinned Hugging Face artifact documented in `docs/model-sources.md` | Apache-2.0 as documented by the model source |
-| llama.cpp Windows CPU runtime | Pinned upstream GitHub release asset | MIT |
+| Vercel | Hosts the WinReclaim landing page and server-side assistant proxy | Vercel service terms |
+| OpenRouter | Routes explicit advisory requests through `openrouter/free` | OpenRouter service terms and routed-provider terms |
 
-The model and runtime are stored under `%LOCALAPPDATA%\WinReclaim\models\storage-assistant` and can be removed from Settings.
+No model weights, provider SDK or reusable OpenRouter credential are bundled with WinReclaim. The provider key is held only as a Vercel environment secret.
 
-## Optional OpenAI API integration
+OpenRouter and routed model/provider names and marks belong to their respective owners. WinReclaim is independent and is not endorsed by or affiliated with those providers.
 
-The reclaim-by-intent feature can use the OpenAI Responses API when the user explicitly provides `OPENAI_API_KEY`. No OpenAI SDK or model weights are bundled with WinReclaim. Use of the service is governed by the user's agreement with OpenAI.
+## Retired local assistant
 
-OpenAI, GPT and related marks belong to their respective owners. WinReclaim is an independent project and is not endorsed by or affiliated with OpenAI.
+Version 1.2.0 could download a Qwen3.5-2B GGUF model and a `llama.cpp` Windows CPU runtime. Version 1.2.1 removes that integration and deletes its owned `%LOCALAPPDATA%\WinReclaim\models\storage-assistant` directory during startup.
+
+Those artifacts are not bundled, downloaded or used by current releases.
+
+## Build Week attribution
+
+WinReclaim was built for OpenAI Build Week — July Edition with GPT-5.6 Sol. OpenAI, GPT and related marks belong to their respective owners. WinReclaim is an independent project and is not endorsed by or affiliated with OpenAI.
 
 ## Installer tooling
 
-Windows installers are produced by Tauri using NSIS and MSI/WiX-compatible packaging components as configured by the build environment. Their upstream licence notices apply to the generated installer components.
+Windows installers are produced by Tauri using NSIS and MSI/WiX-compatible packaging components as configured by the build environment. Their upstream licence notices apply to generated installer components.
 
 ## Fonts, images and branding
 
 Repository-created WinReclaim branding and documentation are distributed with the project under the MIT License unless a file states otherwise. Do not assume third-party screenshots, logos or trademarks are relicensed by inclusion in an issue or pull request.
 
-## Adding a dependency
+## Adding a dependency or service
 
-Contributors adding a dependency must:
+Contributors adding a dependency or remote service must:
 
-1. identify its licence and source;
+1. identify its licence, source and service terms;
 2. verify compatibility with MIT distribution;
 3. avoid abandoned or unverifiable binary downloads;
-4. pin security-sensitive external artifacts;
-5. update this notice when the dependency is user-visible, bundled or downloaded at runtime;
-6. include attribution or full licence text when required.
+4. keep reusable credentials outside distributed clients;
+5. document transmitted fields and retention assumptions;
+6. update this notice when the component or service is user-visible;
+7. include attribution or full licence text when required.
 
 See [docs/licensing.md](docs/licensing.md) for contributor guidance.
