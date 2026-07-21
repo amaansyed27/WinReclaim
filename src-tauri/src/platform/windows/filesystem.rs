@@ -67,8 +67,10 @@ pub fn disk_snapshot(path: &Path) -> Result<DiskSnapshot> {
 pub fn list_drives() -> Result<Vec<DriveInfo>> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
-        GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW, DRIVE_CDROM, DRIVE_FIXED,
-        DRIVE_RAMDISK, DRIVE_REMOTE, DRIVE_REMOVABLE,
+        GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
+    };
+    use windows_sys::Win32::System::WindowsProgramming::{
+        DRIVE_CDROM, DRIVE_FIXED, DRIVE_RAMDISK, DRIVE_REMOTE, DRIVE_REMOVABLE,
     };
 
     let system_root = std::env::var_os("SystemDrive")
