@@ -105,7 +105,7 @@ pub fn uninstall() -> Result<StorageAssistantStatus> {
 
 pub fn analyze(report: &ScanReport) -> Result<StorageAssistantReport> {
     let prompt = prompt::build_report_prompt(report)?;
-    let output = inference::generate(&runtime_path(), &model_path(), &prompt, 900)?;
+    let output = inference::generate(&runtime_path(), &model_path(), &prompt, 1_400)?;
     inference::parse_report(report, &output)
 }
 
