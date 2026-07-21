@@ -1,0 +1,57 @@
+name: Apply multi-drive fixes
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: rustfmt
+      - name: Normalize selected roots and format Rust
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          profile = Path('src-tauri/src/scanner/profile.rs')
+          source = profile.read_text()
+          old = '''        let canonical = requested_root
+              .canonicalize()
+              .unwrap_or_else(|_| requested_root.clone());
+          let key = canonical.to_string_lossy().to_ascii_lowercase();
+          if seen.insert(key) {
+              roots.push(canonical);
+          }
+          '''
+          new = '''        let key = requested_root.to_string_lossy().to_ascii_lowercase();
+          if seen.insert(key) {
+              roots.push(requested_root);
+          }
+          '''
+          if old not in source:
+              raise SystemExit('resolve_roots block not found')
+          profile.write_text(source.replace(old, new, 1))
+
+          policy = Path('src-tauri/src/policy.rs')
+          source = policy.read_text()
+          policy.write_text(source.replace('use std::path::{Path, PathBuf};', 'use std::path::PathBuf;'))
+          PY
+          cargo fmt --manifest-path src-tauri/Cargo.toml
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri
+          git commit -m "Normalize multi-drive roots and apply rustfmt"
+          git push
