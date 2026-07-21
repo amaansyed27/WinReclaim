@@ -13,18 +13,33 @@ All notable user-facing changes to WinReclaim are documented here. The project f
 
 ## [1.2.1] - 2026-07-22
 
-### Fixed
+### Added
 
-- Storage Assistant now uses the model's native chat template, disables unnecessary reasoning, and constrains generation with a JSON Schema so local summaries return valid structured output reliably.
-- Structured assistant output is read from a dedicated file and parsed with balanced JSON handling instead of depending on unstructured console text.
-- Assistant failures now provide a retry action and collapsible technical details without interrupting the deterministic scan report.
+- Added a server-side Vercel proxy for optional Storage Assistant and reclaim-by-intent requests.
+- Added OpenRouter's `openrouter/free` router with strict structured-output schemas and routed-model disclosure.
+- Added automatic startup migration that removes the retired local Storage Assistant model and runtime directory.
 
 ### Changed
 
-- Redesigned the storage review screen with clearer drive metrics, readable storage categories, stronger cleanup hierarchy, and larger finding text.
-- Placed recommended cleanup and optional local analysis in a focused action area instead of stacking oversized full-width panels.
+- Replaced the Qwen GGUF and `llama.cpp` local assistant with an on-demand cloud explanation layer; the base installer no longer downloads, installs or manages model files.
+- Judges and users can test cloud assistance without entering an API key because the provider credential remains a server-side Vercel environment secret.
+- Restricted storage-summary requests to aggregate drive totals and category, risk and action-count metadata.
+- Restricted reclaim-by-intent requests to the user's sentence plus opaque candidate IDs, category, size, deterministic risk and recovery consequence.
+- Redesigned the storage review screen with clearer drive metrics, readable storage categories, stronger cleanup hierarchy and larger finding text.
+- Placed recommended cleanup and optional cloud analysis in a focused action area instead of stacking oversized full-width panels.
 - Replaced the content-obscuring sticky footer with a normal review action bar.
-- Added explicit local-analysis loading, ready, success, and failure states.
+- Added explicit cloud-analysis loading, ready, success and failure states.
+
+### Fixed
+
+- Assistant failures now provide a retry action and collapsible technical details without interrupting the deterministic scan report.
+- Cloud output is constrained and validated before display; unsafe cleanup claims are rejected.
+
+### Security
+
+- Provider API keys are no longer accepted or stored by the desktop application and are never embedded in source, installers or the webview.
+- The proxy accepts only fixed tasks, validates request and response shapes, caps payloads and output, and prevents client-selected models, tools or provider options.
+- Paths, drive labels, usernames, folder names, project names, directory trees and file contents stay local.
 
 ## [1.2.0] - 2026-07-22
 
