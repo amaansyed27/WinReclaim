@@ -1,14 +1,14 @@
 use crate::actions::execute_item;
 use crate::app_data::{self, AppDataMutation, AppDataSummary, ResetAppRequest};
 use crate::domain::{
-    AiStatus, CleanupPlan, CleanupReceipt, CreatePlanRequest, ExecutePlanRequest, IntentRequest,
-    IntentSuggestion, ReclaimPassport, RestoreRequest, RestoreResult, ScanReport, ScanRequest,
-    StorageTimeline, VaultEntry,
+    AiStatus, CleanupPlan, CleanupReceipt, CreatePlanRequest, DriveInfo, ExecutePlanRequest,
+    IntentRequest, IntentSuggestion, ReclaimPassport, RestoreRequest, RestoreResult, ScanReport,
+    ScanRequest, StorageTimeline, VaultEntry,
 };
 use crate::insights::{build_reclaim_passports, build_storage_timeline, persist_scan_snapshot};
 use crate::intent::{ai_status, interpret_intent};
 use crate::planner::{build_plan, verify_plan_hash};
-use crate::platform::windows::disk_snapshot;
+use crate::platform::windows::{disk_snapshot, list_drives};
 use crate::receipts::persist_receipt;
 use crate::scanner::scan_profile;
 use crate::storage::AppState;
@@ -51,6 +51,11 @@ pub async fn start_scan(
 #[tauri::command]
 pub fn cancel_scan(state: State<'_, AppState>) {
     state.cancel_scan.store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn list_storage_drives() -> Result<Vec<DriveInfo>, String> {
+    list_drives().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -132,15 +137,13 @@ pub async fn execute_cleanup_plan(
     let receipt = tauri::async_runtime::spawn_blocking(move || {
         let receipt_id = Uuid::new_v4();
         let started_at = Utc::now();
-        let disk_before =
-            disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
+        let disk_free_before = combined_free_bytes(&latest_scan)?;
         let results = plan
             .items
             .iter()
             .map(|item| execute_item(item, receipt_id))
             .collect::<Vec<_>>();
-        let disk_after =
-            disk_snapshot(Path::new(&latest_scan.root)).map_err(|error| error.to_string())?;
+        let disk_free_after = combined_free_bytes(&latest_scan)?;
         let vault_entry_ids = results
             .iter()
             .flat_map(|result| result.vault_entry_ids.iter().copied())
@@ -152,9 +155,9 @@ pub async fn execute_cleanup_plan(
             plan_hash: plan.plan_hash.clone(),
             started_at,
             completed_at: Utc::now(),
-            disk_free_before: disk_before.free_bytes,
-            disk_free_after: disk_after.free_bytes,
-            actual_reclaimed_bytes: disk_after.free_bytes.saturating_sub(disk_before.free_bytes),
+            disk_free_before,
+            disk_free_after,
+            actual_reclaimed_bytes: disk_free_after.saturating_sub(disk_free_before),
             estimated_reclaim_bytes: plan.estimated_reclaim_bytes,
             results,
             vault_entry_ids,
@@ -176,6 +179,18 @@ pub async fn execute_cleanup_plan(
         .push(receipt.clone());
 
     Ok(receipt)
+}
+
+fn combined_free_bytes(report: &ScanReport) -> Result<u64, String> {
+    let roots = if report.drives.is_empty() {
+        vec![report.root.clone()]
+    } else {
+        report.drives.iter().map(|drive| drive.root.clone()).collect()
+    };
+    roots.into_iter().try_fold(0_u64, |total, root| {
+        let snapshot = disk_snapshot(Path::new(&root)).map_err(|error| error.to_string())?;
+        Ok(total.saturating_add(snapshot.free_bytes))
+    })
 }
 
 #[tauri::command]
