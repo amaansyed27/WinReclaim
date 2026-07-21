@@ -72,7 +72,12 @@ pub fn list_drives() -> Result<Vec<DriveInfo>> {
     };
 
     let system_root = std::env::var_os("SystemDrive")
-        .map(|value| PathBuf::from(format!("{}\\", value.to_string_lossy().trim_end_matches(['\\', '/']))))
+        .map(|value| {
+            PathBuf::from(format!(
+                "{}\\",
+                value.to_string_lossy().trim_end_matches(['\\', '/'])
+            ))
+        })
         .unwrap_or_else(|| drive_root(&user_profile().unwrap_or_else(|_| PathBuf::from("C:\\"))));
     let mask = unsafe { GetLogicalDrives() };
     if mask == 0 {
@@ -162,7 +167,10 @@ pub fn list_drives() -> Result<Vec<DriveInfo>> {
 
 #[cfg(windows)]
 fn wide_string(buffer: &[u16]) -> String {
-    let length = buffer.iter().position(|value| *value == 0).unwrap_or(buffer.len());
+    let length = buffer
+        .iter()
+        .position(|value| *value == 0)
+        .unwrap_or(buffer.len());
     String::from_utf16_lossy(&buffer[..length])
 }
 

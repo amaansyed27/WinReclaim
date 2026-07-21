@@ -57,11 +57,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         skipped_entries = skipped_entries.saturating_add(partial.skipped_entries);
         errors.append(&mut partial.errors);
         for finding in partial.findings {
-            let key = format!(
-                "{}|{}",
-                finding.rule_id,
-                finding.path.to_ascii_lowercase()
-            );
+            let key = format!("{}|{}", finding.rule_id, finding.path.to_ascii_lowercase());
             findings_by_key
                 .entry(key)
                 .and_modify(|existing| {
@@ -101,7 +97,12 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         app,
         "Scan complete",
         None,
-        (roots.len(), roots.len(), report.disk.used_bytes, scanned_entries),
+        (
+            roots.len(),
+            roots.len(),
+            report.disk.used_bytes,
+            scanned_entries,
+        ),
     );
     Ok(report)
 }
@@ -361,12 +362,9 @@ fn resolve_roots(request: &ScanRequest, drives: &[DriveInfo]) -> Result<Vec<Path
                 requested_root.display()
             ));
         }
-        let canonical = requested_root
-            .canonicalize()
-            .unwrap_or_else(|_| requested_root.clone());
-        let key = canonical.to_string_lossy().to_ascii_lowercase();
+        let key = requested_root.to_string_lossy().to_ascii_lowercase();
         if seen.insert(key) {
-            roots.push(canonical);
+            roots.push(requested_root);
         }
     }
 
@@ -628,9 +626,7 @@ fn project_output_descriptor(
             "The environment must be recreated and dependencies reinstalled.",
             RiskClass::RebuildOrRedownload,
         )),
-        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage"
-            if has_project_marker(parent) =>
-        {
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" if has_project_marker(parent) => {
             Some((
                 "project.build_output",
                 "Project build output",

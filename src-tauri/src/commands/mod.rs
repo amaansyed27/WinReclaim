@@ -185,7 +185,11 @@ fn combined_free_bytes(report: &ScanReport) -> Result<u64, String> {
     let roots = if report.drives.is_empty() {
         vec![report.root.clone()]
     } else {
-        report.drives.iter().map(|drive| drive.root.clone()).collect()
+        report
+            .drives
+            .iter()
+            .map(|drive| drive.root.clone())
+            .collect()
     };
     roots.into_iter().try_fold(0_u64, |total, root| {
         let snapshot = disk_snapshot(Path::new(&root)).map_err(|error| error.to_string())?;

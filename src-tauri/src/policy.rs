@@ -1,7 +1,7 @@
 use crate::domain::{ActionKind, DriveInfo, Finding, RecoveryClass, RiskClass, ScanRequest};
 use crate::rules::RULE_SET_VERSION;
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub const VAULT_RETENTION_DAYS: i64 = 7;
 pub const SNAPSHOT_LIMIT: usize = 40;
