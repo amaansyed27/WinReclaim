@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const DATA_GENERATION: &str = "2026.07.clean-start.1";
+const DATA_GENERATION: &str = "2026.07.multi-drive.1";
 const DATA_GENERATION_FILE: &str = "data-generation";
 
 #[derive(Debug, Clone, Serialize)]
