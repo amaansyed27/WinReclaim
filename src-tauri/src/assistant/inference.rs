@@ -1,4 +1,4 @@
-use super::{BASE_MODEL, MODEL_NAME, QUANTIZATION};
+use super::{prompt::SYSTEM_PROMPT, BASE_MODEL, MODEL_NAME, QUANTIZATION};
 use crate::domain::{AssistantAnnotation, ScanReport, StorageAssistantReport};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -11,6 +11,54 @@ use uuid::Uuid;
 
 const CONTEXT_TOKENS: u32 = 8_192;
 const MAX_ANNOTATIONS: usize = 15;
+const REPORT_JSON_SCHEMA: &str = r#"{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string" },
+    "observations": {
+      "type": "array",
+      "maxItems": 6,
+      "items": { "type": "string" }
+    },
+    "annotations": {
+      "type": "array",
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": { "type": "string" },
+          "suggested_name": { "type": "string" },
+          "group": {
+            "type": "string",
+            "enum": [
+              "Windows and system",
+              "Browsers and web runtimes",
+              "Developer tools and package managers",
+              "Android development",
+              "Media and recordings",
+              "Projects and downloads",
+              "Installed applications",
+              "User data",
+              "Other large locations"
+            ]
+          },
+          "explanation": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "required": [
+          "finding_id",
+          "suggested_name",
+          "group",
+          "explanation",
+          "confidence"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["summary", "observations", "annotations"],
+  "additionalProperties": false
+}"#;
 const ALLOWED_GROUPS: &[&str] = &[
     "Windows and system",
     "Browsers and web runtimes",
@@ -63,8 +111,17 @@ pub fn generate(
 
     let request_root = super::model_root().join("requests");
     fs::create_dir_all(&request_root)?;
-    let prompt_path = request_root.join(format!("{}.txt", Uuid::new_v4()));
+    let request_id = Uuid::new_v4();
+    let prompt_path = request_root.join(format!("{request_id}.prompt.txt"));
+    let system_path = request_root.join(format!("{request_id}.system.txt"));
+    let schema_path = request_root.join(format!("{request_id}.schema.json"));
+    let output_path = request_root.join(format!("{request_id}.output.json"));
+
     fs::write(&prompt_path, prompt).context("Unable to prepare the local assistant request")?;
+    fs::write(&system_path, SYSTEM_PROMPT)
+        .context("Unable to prepare the local assistant system prompt")?;
+    fs::write(&schema_path, REPORT_JSON_SCHEMA)
+        .context("Unable to prepare the local assistant output schema")?;
 
     let threads = std::thread::available_parallelism()
         .map(|count| count.get().min(8))
@@ -76,6 +133,12 @@ pub fn generate(
         .arg(model_path)
         .arg("--file")
         .arg(&prompt_path)
+        .arg("--system-prompt-file")
+        .arg(&system_path)
+        .arg("--json-schema-file")
+        .arg(&schema_path)
+        .arg("--output-file")
+        .arg(&output_path)
         .arg("--ctx-size")
         .arg(CONTEXT_TOKENS.to_string())
         .arg("--n-predict")
@@ -83,9 +146,19 @@ pub fn generate(
         .arg("--threads")
         .arg(threads.to_string())
         .arg("--temp")
-        .arg("0")
-        .arg("--no-conversation")
+        .arg("0.1")
+        .arg("--top-k")
+        .arg("20")
+        .arg("--top-p")
+        .arg("0.9")
+        .arg("--conversation")
         .arg("--single-turn")
+        .arg("--reasoning")
+        .arg("off")
+        .arg("--reasoning-budget")
+        .arg("0")
+        .arg("--chat-template-kwargs")
+        .arg(r#"{"enable_thinking":false}"#)
         .arg("--no-display-prompt")
         .arg("--no-show-timings")
         .arg("--no-warmup")
@@ -104,8 +177,20 @@ pub fn generate(
     }
 
     let result = command.output();
-    let _ = fs::remove_file(&prompt_path);
-    let output = result.context("Unable to launch the optional llama.cpp runtime")?;
+    let output = match result {
+        Ok(output) => output,
+        Err(error) => {
+            cleanup_request_files(&[&prompt_path, &system_path, &schema_path, &output_path]);
+            return Err(error).context("Unable to launch the optional llama.cpp runtime");
+        }
+    };
+
+    let generated = fs::read_to_string(&output_path)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| String::from_utf8_lossy(&output.stdout).into_owned());
+    cleanup_request_files(&[&prompt_path, &system_path, &schema_path, &output_path]);
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow!(
@@ -113,13 +198,17 @@ pub fn generate(
             compact_process_error(&stderr)
         ));
     }
-
-    let generated = String::from_utf8(output.stdout)
-        .context("The local Storage Assistant returned invalid UTF-8 output")?;
     if generated.trim().is_empty() {
         return Err(anyhow!("The Storage Assistant returned an empty report"));
     }
+
     Ok(generated)
+}
+
+fn cleanup_request_files(paths: &[&Path]) {
+    for path in paths {
+        let _ = fs::remove_file(path);
+    }
 }
 
 fn compact_process_error(stderr: &str) -> String {
@@ -201,16 +290,44 @@ pub fn parse_report(report: &ScanReport, output: &str) -> Result<StorageAssistan
 }
 
 fn extract_json(output: &str) -> Result<&str> {
+    let output = output.trim_start_matches('\u{feff}');
     let start = output
         .find('{')
         .ok_or_else(|| anyhow!("The Storage Assistant output did not contain JSON"))?;
-    let end = output
-        .rfind('}')
-        .ok_or_else(|| anyhow!("The Storage Assistant output did not contain complete JSON"))?;
-    if end < start {
-        return Err(anyhow!("The Storage Assistant JSON was incomplete"));
+
+    let mut depth = 0_u32;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (offset, character) in output[start..].char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match character {
+            '"' => in_string = true,
+            '{' => depth = depth.saturating_add(1),
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let end = start + offset + character.len_utf8();
+                    return Ok(&output[start..end]);
+                }
+            }
+            _ => {}
+        }
     }
-    Ok(&output[start..=end])
+
+    Err(anyhow!(
+        "The Storage Assistant output did not contain complete JSON"
+    ))
 }
 
 fn clean_line(value: &str, max_chars: usize) -> String {
@@ -284,6 +401,16 @@ mod tests {
     fn process_errors_are_bounded() {
         let message = compact_process_error(&"failure ".repeat(500));
         assert!(message.len() <= 600);
+    }
+
+    #[test]
+    fn extracts_balanced_json_from_wrapped_output() {
+        let output = "assistant\n```json\n{\"summary\":\"A brace } inside a string\",\"observations\":[],\"annotations\":[]}\n```\n";
+        let extracted = extract_json(output).unwrap();
+        assert_eq!(
+            extracted,
+            "{\"summary\":\"A brace } inside a string\",\"observations\":[],\"annotations\":[]}"
+        );
     }
 
     #[test]
