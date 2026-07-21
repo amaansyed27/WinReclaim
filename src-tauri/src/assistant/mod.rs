@@ -1,137 +1,192 @@
-mod download;
-mod inference;
-mod prompt;
-
-use crate::app_data;
-use crate::domain::{ScanReport, StorageAssistantReport, StorageAssistantStatus};
-use anyhow::Result;
+use crate::cloud;
+use crate::domain::{RiskClass, ScanReport, StorageAssistantReport, StorageAssistantStatus};
+use anyhow::{anyhow, Result};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
-use tauri::AppHandle;
+use std::collections::BTreeMap;
 
-pub const MODEL_NAME: &str = "WinReclaim Storage Assistant";
-pub const BASE_MODEL: &str = "Qwen3.5-2B";
-pub const QUANTIZATION: &str = "Q4_K_M";
-pub const MODEL_FILE: &str = "Qwen3.5-2B-Q4_K_M.gguf";
-pub const MODEL_SHA256: &str = "84aeb7fe40e7b833d71303d7f1b9f9c1991b931b5dbd214e0aa48d56a0af1f85";
-pub const MODEL_EXPECTED_BYTES: u64 = 1_400_000_000;
-pub const MODEL_URL: &str = "https://huggingface.co/bartowski/Qwen_Qwen3.5-2B-GGUF/resolve/915a52556175c333102d04f996380950d35155d9/Qwen_Qwen3.5-2B-Q4_K_M.gguf?download=true";
+const ROUTER_NAME: &str = "OpenRouter Free Models Router";
+const ROUTER_MODEL: &str = "openrouter/free";
+const MAX_CATEGORIES: usize = 40;
+const MAX_OBSERVATIONS: usize = 6;
 
-pub const RUNTIME_NAME: &str = "llama.cpp CPU runtime";
-pub const RUNTIME_TAG: &str = "b9993";
-pub const RUNTIME_ASSET: &str = "llama-b9993-bin-win-cpu-x64.zip";
-pub const RUNTIME_RELEASE_API: &str =
-    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b9993";
-pub const RUNTIME_EXPECTED_BYTES: u64 = 19_500_000;
-pub const RUNTIME_EXE: &str = "llama-cli.exe";
+#[derive(Debug, Default)]
+struct CategoryAccumulator {
+    bytes: u64,
+    locations: u64,
+    actionable_locations: u64,
+    safe_now: u64,
+    rebuild_or_redownload: u64,
+    review_first: u64,
+    protected: u64,
+}
 
-const MANIFEST_FILE: &str = "manifest.json";
+#[derive(Debug, Serialize)]
+struct StorageSummaryPayload {
+    used_bytes: u64,
+    free_bytes: u64,
+    total_bytes: u64,
+    drive_count: usize,
+    scanned_entries: u64,
+    skipped_entries: u64,
+    rows_may_overlap: bool,
+    categories: Vec<CategorySummary>,
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ModelManifest {
-    pub base_model: String,
-    pub quantization: String,
-    pub sha256: String,
-    pub bytes: u64,
-    pub source: String,
-    pub license: String,
-    pub installed_at: String,
+#[derive(Debug, Serialize)]
+struct CategorySummary {
+    category: String,
+    bytes: u64,
+    locations: u64,
+    actionable_locations: u64,
+    risk_counts: RiskCounts,
+}
+
+#[derive(Debug, Serialize)]
+struct RiskCounts {
+    safe_now: u64,
+    rebuild_or_redownload: u64,
+    review_first: u64,
+    protected: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct CloudStorageSummary {
+    summary: String,
     #[serde(default)]
-    pub runtime_tag: String,
-    #[serde(default)]
-    pub runtime_asset: String,
-    #[serde(default)]
-    pub runtime_sha256: String,
-    #[serde(default)]
-    pub runtime_bytes: u64,
+    observations: Vec<String>,
 }
 
 pub fn status(busy: bool) -> StorageAssistantStatus {
-    let model_path = model_path();
-    let runtime_path = runtime_path();
-    let manifest = read_manifest();
-    let file_bytes = fs::metadata(&model_path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
-
-    let model_verified = manifest.as_ref().is_some_and(|manifest| {
-        manifest.sha256.eq_ignore_ascii_case(MODEL_SHA256)
-            && manifest.bytes == file_bytes
-            && file_bytes > 0
-    });
-    let runtime_verified = manifest.as_ref().is_some_and(|manifest| {
-        manifest.runtime_tag == RUNTIME_TAG
-            && manifest.runtime_asset == RUNTIME_ASSET
-            && manifest.runtime_sha256.len() == 64
-            && manifest.runtime_bytes > 0
-            && runtime_path.is_file()
-    });
-
     StorageAssistantStatus {
-        installed: model_path.is_file() && runtime_path.is_file() && manifest.is_some(),
-        verified: model_verified && runtime_verified,
+        available: cloud::assistant_endpoint().starts_with("https://"),
         busy,
-        model: format!("{BASE_MODEL} {QUANTIZATION}"),
-        quantization: QUANTIZATION.to_string(),
-        runtime: format!(
-            "{RUNTIME_NAME} {RUNTIME_TAG} sidecar, downloaded only with the assistant"
-        ),
-        model_bytes: file_bytes,
-        expected_bytes: manifest
-            .as_ref()
-            .map(|manifest| manifest.bytes)
-            .unwrap_or(MODEL_EXPECTED_BYTES),
-        model_path: model_path.to_string_lossy().to_string(),
-        license: "Apache-2.0 model · MIT runtime".to_string(),
-        privacy_note: "The model and runtime are optional local downloads. The model receives only the completed scan report and cannot enable, select or execute cleanup actions."
+        provider: ROUTER_NAME.to_string(),
+        model: ROUTER_MODEL.to_string(),
+        privacy_note: "Only aggregate drive totals and category, size, risk and action-count metadata are sent. Paths, usernames, folder names, project names and file contents stay on this PC."
             .to_string(),
     }
 }
 
-pub fn install(app: &AppHandle) -> Result<StorageAssistantStatus> {
-    download::install(app)?;
-    Ok(status(false))
-}
-
-pub fn uninstall() -> Result<StorageAssistantStatus> {
-    let root = model_root();
-    if root.exists() {
-        fs::remove_dir_all(root)?;
-    }
-    Ok(status(false))
-}
-
 pub fn analyze(report: &ScanReport) -> Result<StorageAssistantReport> {
-    let prompt = prompt::build_report_prompt(report)?;
-    let output = inference::generate(&runtime_path(), &model_path(), &prompt, 1_400)?;
-    inference::parse_report(report, &output)
+    let payload = build_payload(report);
+    let (model, response): (String, CloudStorageSummary) =
+        cloud::request("storage_summary", &payload)?;
+
+    let summary = clean_line(&response.summary, 700);
+    if summary.len() < 20 || contains_cleanup_claim(&summary) {
+        return Err(anyhow!(
+            "The cloud assistant returned a summary that did not pass WinReclaim safety validation"
+        ));
+    }
+
+    let observations = response
+        .observations
+        .into_iter()
+        .map(|value| clean_line(&value, 260))
+        .filter(|value| value.len() >= 8)
+        .filter(|value| !contains_cleanup_claim(value))
+        .take(MAX_OBSERVATIONS)
+        .collect::<Vec<_>>();
+
+    Ok(StorageAssistantReport {
+        scan_id: report.scan_id,
+        generated_at: Utc::now(),
+        model,
+        summary,
+        observations,
+        advisory_only: true,
+    })
 }
 
-pub(crate) fn model_root() -> PathBuf {
-    app_data::app_root()
-        .join("models")
-        .join("storage-assistant")
+fn build_payload(report: &ScanReport) -> StorageSummaryPayload {
+    let mut categories = BTreeMap::<String, CategoryAccumulator>::new();
+
+    for finding in &report.findings {
+        let category = clean_line(&finding.category, 80);
+        let entry = categories.entry(category).or_default();
+        entry.bytes = entry.bytes.saturating_add(finding.estimated_bytes);
+        entry.locations = entry.locations.saturating_add(1);
+        if finding.action_available {
+            entry.actionable_locations = entry.actionable_locations.saturating_add(1);
+        }
+        match finding.risk_class {
+            RiskClass::SafeNow => entry.safe_now = entry.safe_now.saturating_add(1),
+            RiskClass::RebuildOrRedownload => {
+                entry.rebuild_or_redownload = entry.rebuild_or_redownload.saturating_add(1)
+            }
+            RiskClass::ReviewFirst => {
+                entry.review_first = entry.review_first.saturating_add(1)
+            }
+            RiskClass::Protected => entry.protected = entry.protected.saturating_add(1),
+        }
+    }
+
+    let mut categories = categories
+        .into_iter()
+        .map(|(category, value)| CategorySummary {
+            category,
+            bytes: value.bytes,
+            locations: value.locations,
+            actionable_locations: value.actionable_locations,
+            risk_counts: RiskCounts {
+                safe_now: value.safe_now,
+                rebuild_or_redownload: value.rebuild_or_redownload,
+                review_first: value.review_first,
+                protected: value.protected,
+            },
+        })
+        .collect::<Vec<_>>();
+    categories.sort_by(|left, right| right.bytes.cmp(&left.bytes));
+    categories.truncate(MAX_CATEGORIES);
+
+    StorageSummaryPayload {
+        used_bytes: report.disk.used_bytes,
+        free_bytes: report.disk.free_bytes,
+        total_bytes: report.disk.total_bytes,
+        drive_count: report.drives.len().max(1),
+        scanned_entries: report.scanned_entries,
+        skipped_entries: report.skipped_entries,
+        rows_may_overlap: true,
+        categories,
+    }
 }
 
-pub(crate) fn model_path() -> PathBuf {
-    model_root().join(MODEL_FILE)
+fn clean_line(value: &str, max_chars: usize) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(max_chars)
+        .collect()
 }
 
-pub(crate) fn runtime_root() -> PathBuf {
-    model_root().join("runtime").join(RUNTIME_TAG)
+fn contains_cleanup_claim(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    [
+        "safe to delete",
+        "safe to remove",
+        "delete this",
+        "remove this",
+        "should delete",
+        "should remove",
+        "clean this",
+        "run the command",
+    ]
+    .iter()
+    .any(|claim| value.contains(claim))
 }
 
-pub(crate) fn runtime_path() -> PathBuf {
-    runtime_root().join(RUNTIME_EXE)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub(crate) fn manifest_path() -> PathBuf {
-    model_root().join(MANIFEST_FILE)
-}
-
-fn read_manifest() -> Option<ModelManifest> {
-    let content = fs::read_to_string(manifest_path()).ok()?;
-    serde_json::from_str(&content).ok()
+    #[test]
+    fn cleanup_claims_are_rejected() {
+        assert!(contains_cleanup_claim("This is safe to delete."));
+        assert!(!contains_cleanup_claim(
+            "This category contains mostly rebuildable application data."
+        ));
+    }
 }
