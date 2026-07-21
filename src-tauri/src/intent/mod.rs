@@ -1,10 +1,10 @@
-mod openai;
+mod openrouter;
 mod selector;
 
 use crate::domain::{Finding, IntentRequest, IntentSuggestion, RiskClass, ScanReport};
 use anyhow::{anyhow, Result};
 
-pub use openai::ai_status;
+pub use openrouter::ai_status;
 
 const MAX_PROMPT_CHARS: usize = 1_000;
 
@@ -37,7 +37,7 @@ pub fn interpret_intent(report: &ScanReport, request: IntentRequest) -> Result<I
         ));
     }
 
-    let (model, constraints) = openai::request_constraints(prompt, &candidates)?;
+    let (model, constraints) = openrouter::request_constraints(prompt, &candidates)?;
     selector::build_suggestion(&model, &candidates, constraints)
 }
 
