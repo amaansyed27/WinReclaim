@@ -1,0 +1,69 @@
+name: Apply Windows drive API fix
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: rustfmt
+      - name: Fix Windows imports and warning
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('src-tauri/Cargo.toml')
+          source = cargo.read_text()
+          source = source.replace(
+              '"Win32_UI_Shell", "Win32_Storage_FileSystem"]',
+              '"Win32_UI_Shell", "Win32_Storage_FileSystem", "Win32_System_WindowsProgramming"]'
+          )
+          cargo.write_text(source)
+
+          filesystem = Path('src-tauri/src/platform/windows/filesystem.rs')
+          source = filesystem.read_text()
+          old = '''    use windows_sys::Win32::Storage::FileSystem::{
+              GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW, DRIVE_CDROM, DRIVE_FIXED,
+              DRIVE_RAMDISK, DRIVE_REMOTE, DRIVE_REMOVABLE,
+          };
+          '''
+          new = '''    use windows_sys::Win32::Storage::FileSystem::{
+              GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
+          };
+          use windows_sys::Win32::System::WindowsProgramming::{
+              DRIVE_CDROM, DRIVE_FIXED, DRIVE_RAMDISK, DRIVE_REMOTE, DRIVE_REMOVABLE,
+          };
+          '''
+          if old not in source:
+              raise SystemExit('Windows drive import block not found')
+          filesystem.write_text(source.replace(old, new, 1))
+
+          profile = Path('src-tauri/src/scanner/profile.rs')
+          source = profile.read_text()
+          source = source.replace(
+              '        discovered_bytes = discovered_bytes.saturating_add(system_caches.discovered_bytes);\n',
+              '',
+              1
+          )
+          profile.write_text(source)
+          PY
+          cargo fmt --manifest-path src-tauri/Cargo.toml
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri
+          git commit -m "Fix Windows drive API imports"
+          git push
