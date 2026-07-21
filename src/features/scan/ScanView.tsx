@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScanIcon, ShieldIcon } from "../../components/Icons";
 import { formatBytes } from "../../lib/format";
 import { loadPreferences } from "../../lib/settings";
-import type { ScanMode, ScanOptions, ScanProgress, ScanReport } from "../../types";
+import { listStorageDrives } from "../../lib/tauri";
+import type { DriveInfo, ScanMode, ScanOptions, ScanProgress, ScanReport } from "../../types";
 
 interface ScanViewProps {
   scanning: boolean;
@@ -34,6 +35,7 @@ const modeCopy: Record<ScanProfile, string> = {
 
 const profileOptions: Record<ScanProfile, ScanOptions> = {
   quick: {
+    roots: [],
     mode: "quick",
     includeKnownTargets: true,
     includeProjectOutputs: false,
@@ -44,6 +46,7 @@ const profileOptions: Record<ScanProfile, ScanOptions> = {
     maxUnknownFindings: 10
   },
   balanced: {
+    roots: [],
     mode: "balanced",
     includeKnownTargets: true,
     includeProjectOutputs: false,
@@ -54,6 +57,7 @@ const profileOptions: Record<ScanProfile, ScanOptions> = {
     maxUnknownFindings: 20
   },
   deep: {
+    roots: [],
     mode: "deep",
     includeKnownTargets: true,
     includeProjectOutputs: true,
@@ -64,6 +68,7 @@ const profileOptions: Record<ScanProfile, ScanOptions> = {
     maxUnknownFindings: 40
   },
   ultra: {
+    roots: [],
     mode: "deep",
     includeKnownTargets: true,
     includeProjectOutputs: true,
@@ -87,6 +92,33 @@ export function ScanView({
   const initialProfile = loadPreferences().defaultScanProfile;
   const [profile, setProfile] = useState<ScanProfile>(initialProfile);
   const [options, setOptions] = useState<ScanOptions>({ ...profileOptions[initialProfile] });
+  const [drives, setDrives] = useState<DriveInfo[]>([]);
+  const [selectedRoots, setSelectedRoots] = useState<Set<string>>(new Set());
+  const [drivesLoading, setDrivesLoading] = useState(true);
+  const [driveError, setDriveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listStorageDrives()
+      .then((nextDrives) => {
+        if (!active) return;
+        setDrives(nextDrives);
+        const systemDrive = nextDrives.find((drive) => drive.isSystem);
+        const firstFixed = nextDrives.find((drive) => drive.kind === "fixed");
+        const initial = systemDrive ?? firstFixed ?? nextDrives[0];
+        if (initial) setSelectedRoots(new Set([initial.root]));
+      })
+      .catch((nextError) => {
+        if (!active) return;
+        setDriveError(String(nextError));
+      })
+      .finally(() => {
+        if (active) setDrivesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const progressValue = progress?.totalTargets
     ? Math.round((progress.completedTargets / progress.totalTargets) * 100)
@@ -97,6 +129,11 @@ export function ScanView({
   const cleanableItems = report?.findings.filter((finding) => finding.actionAvailable).length ?? 0;
   const reviewOnlyItems = report?.findings.filter((finding) => !finding.actionAvailable).length ?? 0;
   const ultraLocked = profile === "ultra";
+  const selectedDrives = useMemo(
+    () => drives.filter((drive) => selectedRoots.has(drive.root)),
+    [drives, selectedRoots]
+  );
+  const systemSelected = selectedDrives.some((drive) => drive.isSystem);
 
   function setFlag(key: BooleanScanOption, value: boolean) {
     setOptions((current) => ({ ...current, [key]: value }));
@@ -104,7 +141,27 @@ export function ScanView({
 
   function selectProfile(nextProfile: ScanProfile) {
     setProfile(nextProfile);
-    setOptions({ ...profileOptions[nextProfile] });
+    setOptions((current) => ({
+      ...profileOptions[nextProfile],
+      roots: current.roots
+    }));
+  }
+
+  function toggleDrive(root: string) {
+    setSelectedRoots((current) => {
+      const next = new Set(current);
+      if (next.has(root)) next.delete(root);
+      else next.add(root);
+      return next;
+    });
+  }
+
+  function runScan() {
+    onStart({
+      ...options,
+      roots: [...selectedRoots],
+      includeSystemDriveCaches: systemSelected && options.includeSystemDriveCaches
+    });
   }
 
   return (
@@ -113,18 +170,36 @@ export function ScanView({
         <div>
           <span className="page-kicker">WinReclaim</span>
           <h1>Free up space safely</h1>
-          <p>Scan your PC, review the recommendation, then clean. Nothing is removed without your confirmation.</p>
+          <p>Choose one or more drives, review the recommendation, then clean. Nothing is removed without confirmation.</p>
         </div>
       </header>
+
+      {!scanning && !report && (
+        <DrivePicker
+          drives={drives}
+          selectedRoots={selectedRoots}
+          loading={drivesLoading}
+          error={driveError}
+          onToggle={toggleDrive}
+        />
+      )}
 
       <section className="surface simple-scan-card">
         {!scanning && !report && (
           <div className="simple-scan-start">
             <span className="simple-scan-icon"><ScanIcon /></span>
             <h2>Find files you no longer need</h2>
-            <p>WinReclaim looks for temporary files, old caches and other space you can safely recover.</p>
-            <button className="button button-primary simple-primary-action" onClick={() => onStart(options)}>
-              Scan my PC
+            <p>
+              {selectedDrives.length
+                ? `${selectedDrives.length} drive${selectedDrives.length === 1 ? "" : "s"} selected.`
+                : "Select at least one drive to begin."}
+            </p>
+            <button
+              className="button button-primary simple-primary-action"
+              onClick={runScan}
+              disabled={drivesLoading || selectedRoots.size === 0}
+            >
+              Scan selected drives
             </button>
             <span className="simple-action-note">{profile[0].toUpperCase() + profile.slice(1)} scan selected · change it in Settings</span>
           </div>
@@ -152,19 +227,19 @@ export function ScanView({
             <span className="page-kicker">Scan complete</span>
             <h2>{formatBytes(cleanableBytes)} can be cleaned</h2>
             <p>
-              {cleanableItems} item{cleanableItems === 1 ? " is" : "s are"} ready for review.
+              {(report.drives ?? []).length || 1} drive{(report.drives ?? []).length === 1 ? "" : "s"} scanned. {cleanableItems} item{cleanableItems === 1 ? " is" : "s are"} ready for review.
               {reviewOnlyItems > 0 ? ` ${reviewOnlyItems} other large folders are shown separately and will not be removed.` : ""}
             </p>
             <div className="simple-result-actions">
               <button className="button button-primary simple-primary-action" onClick={onContinue}>
-                See what is safe to clean
+                Review storage report
               </button>
-              <button className="button button-secondary" onClick={() => onStart(options)}>Scan again</button>
+              <button className="button button-secondary" onClick={runScan}>Scan again</button>
             </div>
           </div>
         )}
 
-        {error && <p className="error-banner">{error}</p>}
+        {(error || driveError) && <p className="error-banner">{error ?? driveError}</p>}
       </section>
 
       {!scanning && (
@@ -209,7 +284,7 @@ export function ScanView({
               </label>
 
               <label className="config-field">
-                <span>Maximum extra folders</span>
+                <span>Maximum extra folders per drive</span>
                 <select
                   value={options.maxUnknownFindings}
                   disabled={!options.discoverUnknown || ultraLocked}
@@ -234,7 +309,7 @@ export function ScanView({
               <Toggle label="Build and dependency folders" checked={options.includeProjectOutputs} disabled={ultraLocked} onChange={(value) => setFlag("includeProjectOutputs", value)} />
               <Toggle label="Other large folders" checked={options.discoverUnknown} disabled={ultraLocked} onChange={(value) => setFlag("discoverUnknown", value)} />
               <Toggle label="App data" checked={options.includeAppData} disabled={!options.discoverUnknown || ultraLocked} onChange={(value) => setFlag("includeAppData", value)} />
-              <Toggle label="Windows cache folders" checked={options.includeSystemDriveCaches} disabled={ultraLocked} onChange={(value) => setFlag("includeSystemDriveCaches", value)} />
+              <Toggle label="Windows cache folders" checked={options.includeSystemDriveCaches} disabled={!systemSelected || ultraLocked} onChange={(value) => setFlag("includeSystemDriveCaches", value)} />
             </div>
           </div>
         </details>
@@ -244,9 +319,71 @@ export function ScanView({
         <ShieldIcon />
         <div>
           <strong>Designed to avoid important files</strong>
-          <span>Personal files, installed apps and folders without a verified cleanup rule are never automatically selected.</span>
+          <span>Fixed drives can use verified cleanup actions. Removable and network drives are inspection-only.</span>
         </div>
       </section>
+    </section>
+  );
+}
+
+function DrivePicker({
+  drives,
+  selectedRoots,
+  loading,
+  error,
+  onToggle
+}: {
+  drives: DriveInfo[];
+  selectedRoots: Set<string>;
+  loading: boolean;
+  error: string | null;
+  onToggle: (root: string) => void;
+}) {
+  return (
+    <section className="surface drive-picker" aria-label="Choose drives to scan">
+      <div className="drive-picker-head">
+        <div>
+          <span className="surface-label">Scan scope</span>
+          <h2>Choose drives</h2>
+          <p>Fixed local drives support cleanup. Removable and network drives are scanned for inspection only.</p>
+        </div>
+        <span>{selectedRoots.size} selected</span>
+      </div>
+
+      {loading && <div className="drive-picker-state">Detecting mounted drives…</div>}
+      {!loading && error && <div className="drive-picker-state">Drive discovery failed. Restart WinReclaim and try again.</div>}
+      {!loading && !error && (
+        <div className="drive-grid">
+          {drives.map((drive) => {
+            const selected = selectedRoots.has(drive.root);
+            const inspectionOnly = drive.kind === "network" || drive.kind === "removable" || drive.kind === "optical" || drive.kind === "other";
+            const usedPercent = drive.totalBytes ? Math.round((drive.usedBytes / drive.totalBytes) * 100) : 0;
+            return (
+              <label className={`drive-card ${selected ? "is-selected" : ""}`} key={`${drive.volumeId}-${drive.root}`}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggle(drive.root)}
+                />
+                <div className="drive-card-title">
+                  <strong>{drive.root.replace("\\", "")}</strong>
+                  <span>{drive.label || (drive.isSystem ? "Windows" : "Local drive")}</span>
+                </div>
+                <div className="drive-card-meta">
+                  <span>{formatBytes(drive.usedBytes)} used</span>
+                  <span>{formatBytes(drive.freeBytes)} free</span>
+                </div>
+                <div className="drive-usage" aria-label={`${usedPercent}% used`}>
+                  <span style={{ width: `${Math.min(100, usedPercent)}%` }} />
+                </div>
+                <small>
+                  {drive.isSystem ? "System drive" : inspectionOnly ? "Inspection only" : drive.fileSystem || "Fixed drive"}
+                </small>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
