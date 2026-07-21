@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ScanIcon } from "../../components/Icons";
-import { formatBytes } from "../../lib/format";
 import type { ScanReport } from "../../types";
 import { analyzeStorageReport, getStorageAssistantStatus } from "./assistantApi";
 import type { StorageAssistantReport, StorageAssistantStatus } from "./assistantTypes";
@@ -22,11 +21,6 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
     getStorageAssistantStatus().then(setStatus).catch((statusError) => setError(String(statusError)));
   }, [report.scanId]);
 
-  const findingById = useMemo(
-    () => new Map(report.findings.map((finding) => [finding.id, finding])),
-    [report.findings]
-  );
-
   async function analyze() {
     setLoading(true);
     setError(null);
@@ -40,7 +34,7 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
     }
   }
 
-  const installed = Boolean(status?.installed && status.verified);
+  const available = Boolean(status?.available);
 
   return (
     <section className="surface assistant-report-panel" aria-busy={loading}>
@@ -48,36 +42,35 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-title-group">
           <span className="assistant-panel-icon" aria-hidden="true"><ScanIcon /></span>
           <div>
-            <span className="surface-label">Local insight</span>
+            <span className="surface-label">Optional cloud insight</span>
             <h2>Storage Assistant</h2>
-            <p>Turns this scan into a short, structured explanation without changing any cleanup decision.</p>
+            <p>Creates a short explanation from anonymized scan totals without changing any cleanup decision.</p>
           </div>
         </div>
-        <span className={`assistant-status-pill ${installed ? "is-ready" : ""}`}>
+        <span className={`assistant-status-pill ${available ? "is-ready" : ""}`}>
           <i aria-hidden="true" />
-          {installed ? "Ready" : "Needs setup"}
+          {available ? "Available" : "Unavailable"}
         </span>
       </div>
 
-      {!installed && (
-        <div className="assistant-empty-state">
-          <div>
-            <strong>Optional local model is not installed</strong>
-            <span>Install it from Settings once. The model and runtime stay on this PC.</span>
+      {available && !assistantReport && !loading && (
+        <div className="assistant-run-row">
+          <div className="assistant-model-summary">
+            <strong>{status?.provider}</strong>
+            <span>Uses {status?.model} · free routed cloud model · no API key entry required</span>
           </div>
-          <span className="assistant-size-note">About 1.4 GB</span>
+          <button className="button button-primary assistant-run-button" onClick={() => void analyze()}>
+            Generate summary
+          </button>
         </div>
       )}
 
-      {installed && !assistantReport && !loading && (
-        <div className="assistant-run-row">
-          <div className="assistant-model-summary">
-            <strong>{status?.model}</strong>
-            <span>Processes scan metadata only · no file contents · no cloud request</span>
+      {!available && !loading && (
+        <div className="assistant-empty-state">
+          <div>
+            <strong>Cloud assistant is temporarily unavailable</strong>
+            <span>The deterministic scan and cleanup workflow still works normally.</span>
           </div>
-          <button className="button button-primary assistant-run-button" disabled={loading} onClick={() => void analyze()}>
-            Generate summary
-          </button>
         </div>
       )}
 
@@ -85,8 +78,8 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-loading-state" role="status" aria-live="polite">
           <span className="assistant-spinner" aria-hidden="true" />
           <div>
-            <strong>Analyzing this scan locally</strong>
-            <span>Building a constrained JSON report with Qwen3.5-2B. This can take a moment on CPU.</span>
+            <strong>Analyzing anonymized scan metadata</strong>
+            <span>OpenRouter is selecting an available free model that supports structured output.</span>
           </div>
         </div>
       )}
@@ -109,33 +102,9 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
             </div>
           )}
 
-          {assistantReport.annotations.length > 0 && (
-            <div className="assistant-annotations">
-              <div>
-                <span>Clarified folders</span>
-                <small>Suggested labels only. Cleanup classification is unchanged.</small>
-              </div>
-              {assistantReport.annotations.map((annotation) => {
-                const finding = findingById.get(annotation.findingId);
-                if (!finding) return null;
-                return (
-                  <article key={annotation.findingId}>
-                    <div>
-                      <strong>{annotation.suggestedName}</strong>
-                      <span>{annotation.group} · {Math.round(annotation.confidence * 100)}% confidence</span>
-                    </div>
-                    <strong>{formatBytes(finding.estimatedBytes)}</strong>
-                    <p>{annotation.explanation}</p>
-                    <code>{finding.path}</code>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
           <div className="assistant-report-footer">
-            <span>{assistantReport.model}</span>
-            <button className="button button-secondary" disabled={loading} onClick={() => void analyze()}>
+            <span>Routed model: {assistantReport.model}</span>
+            <button className="button button-secondary" onClick={() => void analyze()}>
               Regenerate
             </button>
           </div>
@@ -146,9 +115,9 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-error" role="alert">
           <div>
             <strong>Summary generation failed</strong>
-            <span>The scan is unaffected. Retry once; if it persists, reinstall the assistant from Settings.</span>
+            <span>The scan is unaffected. Free model capacity may be busy; retry after a moment.</span>
           </div>
-          <button className="button button-secondary" onClick={() => void analyze()} disabled={!installed}>Retry</button>
+          <button className="button button-secondary" onClick={() => void analyze()} disabled={!available}>Retry</button>
           <details>
             <summary>Technical details</summary>
             <code>{error}</code>
@@ -156,6 +125,9 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         </div>
       )}
 
+      <p className="assistant-privacy-note">
+        {status?.privacyNote ?? "Paths, usernames, folder names, project names and file contents stay local."}
+      </p>
       <p className="assistant-advisory-note">
         Advisory only. The assistant cannot enable cleanup, select findings, alter safety labels or delete files.
       </p>
