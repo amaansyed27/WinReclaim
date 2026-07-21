@@ -1,73 +1,80 @@
 # OpenAI Build Week — July Edition
 
-WinReclaim was built for the **OpenAI Build Week — July Edition** with **GPT-5.6 Sol** used as a development collaborator for research, architecture review, implementation support, debugging and documentation.
+WinReclaim was built for **OpenAI Build Week — July Edition** with **GPT-5.6 Sol and Codex** used as development collaborators for research, architecture, implementation, debugging, testing and documentation.
 
 ## Origin
 
-The project began with a practical Windows storage investigation. A commonly suspected application was not the main source of disk pressure. The larger contributors were developer and local-AI workloads such as:
+The project began when the Windows system drive was nearly full. WhatsApp looked like the obvious culprit, but it occupied only about **766 MB**. A Codex-assisted investigation showed that the real storage pressure came from developer workloads:
 
-- local model stores;
+- local AI model stores;
 - Android emulators and SDK data;
 - Hugging Face cache;
 - Docker data;
 - Gradle and npm caches;
-- generated project outputs.
+- Rust targets, Python environments and generated project output;
+- temporary Windows files.
 
-A targeted manual cleanup reclaimed significant space without deleting projects or Ollama models. WinReclaim was created to turn that investigation into a repeatable, inspectable and safer product.
+The investigation reclaimed approximately **27.55 GB** without deleting projects or Ollama models. It also consumed a significant amount of Codex usage because the same questions had to be asked repeatedly:
+
+> What created this folder? Is it safe to remove? What will it cost to restore? Can the action be reversed?
+
+WinReclaim turns that one-time investigation into a repeatable Windows product.
 
 ## Build Week goals
 
-The project focused on six user questions:
+WinReclaim answers six questions:
 
 1. What is taking my disk space?
 2. What changed since the previous scan?
-3. Which tool or workload most likely owns it?
+3. Which tool or workload likely owns it?
 4. What can be reclaimed under deterministic policy?
 5. What will removal cost to recover, rebuild or redownload?
 6. Can the action be reversed?
 
-The Build Week implementation prioritizes safety architecture over broad deletion coverage.
+The implementation prioritizes safety architecture over broad deletion coverage.
 
-## How GPT-5.6 Sol was used
+## How GPT-5.6 Sol and Codex were used
 
-GPT-5.6 Sol assisted the development process with tasks such as:
+They assisted with:
 
 - translating the original investigation into product requirements;
-- reviewing module boundaries and cleanup authority;
-- reasoning about Windows path and reparse-point hazards;
-- generating and reviewing implementation changes;
-- debugging Rust, Tauri, packaging and GitHub Actions issues;
+- reviewing Rust/Tauri module and authority boundaries;
+- reasoning about Windows paths, reparse points and recovery risks;
+- implementing and debugging the application;
 - improving user-facing consequence language;
-- drafting test plans and developer documentation;
-- checking that optional AI features remain advisory.
+- packaging signed Windows releases;
+- creating the landing page and documentation;
+- checking that remote model output remains advisory.
 
-Human review and repository tests remain responsible for accepted code and releases. Model assistance does not replace security review, filesystem validation or release signing.
+Repository tests, human review and deterministic Rust code remain responsible for accepted behaviour and releases.
 
 ## AI inside the product
 
-Development with GPT-5.6 Sol is separate from the application's optional AI features.
+Development with GPT-5.6 Sol and Codex is separate from the application's runtime intelligence.
 
-WinReclaim can optionally provide:
+Current releases do **not** use the OpenAI API and do **not** bundle or download a local model. Optional assistance uses OpenRouter's `openrouter/free` router through the WinReclaim Vercel proxy.
 
-- **Reclaim by intent:** a constrained OpenAI API request that translates a user goal into conservative selection constraints. It receives anonymized candidate metadata and has no execution authority.
-- **Storage Assistant:** an optional local Qwen3.5-2B model that summarizes a completed deterministic scan through a verified local `llama.cpp` sidecar. It cannot change safety or action fields.
+- **Storage Assistant** receives aggregate drive totals and category/risk/action counts.
+- **Reclaim by intent** receives the user's sentence plus opaque candidate IDs, size, category, deterministic risk and recovery consequence.
 
-The scanner, rules, planner, cleanup adapters, vault, receipts and signed updates do not depend on AI-generated deletion decisions.
+The desktop app contains no provider API key. Paths, drive labels, usernames, folder names, project names, directory trees and file contents remain local. Remote output cannot add cleanup targets, change risk classes, create plans, run commands or execute deletion.
+
+The scanner, rules, planner, compiled cleanup adapters, Undo Vault, receipts and signed updater remain deterministic.
 
 ## Independent project notice
 
-WinReclaim is an independent open-source project. Participation in or development for Build Week does not imply that OpenAI sponsors, certifies, endorses or maintains the application.
+WinReclaim is an independent open-source project. Participation in Build Week does not imply that OpenAI, OpenRouter, Vercel or any routed model provider sponsors, certifies, endorses or maintains it.
 
-OpenAI, GPT and related names are trademarks of their respective owners.
+All product and company names are trademarks of their respective owners.
 
 ## Continuing after Build Week
 
-Build Week established the initial product and safety model. Future work should continue to follow the same principles:
+Future work should retain the same principles:
 
 - deterministic evidence before action;
 - protected data over convenience;
-- local-first operation;
+- local-first core operation;
+- explicit privacy boundaries for optional cloud requests;
 - transparent recovery consequences;
 - measured receipts rather than marketing claims;
-- signed, reproducible release processes;
-- explicit boundaries for every AI component.
+- signed releases and strict credential separation.
