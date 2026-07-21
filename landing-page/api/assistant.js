@@ -4,6 +4,7 @@ const APP_URL = "https://winreclaim.vercel.app";
 const MAX_BODY_CHARS = 80_000;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT = 20;
+const MAX_RATE_KEYS = 5_000;
 const requestsByIp = new Map();
 
 const storageSchema = {
@@ -23,7 +24,7 @@ const storageSchema = {
   required: ["summary", "observations"]
 };
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
@@ -33,7 +34,7 @@ module.exports = async function handler(req, res) {
   }
 
   const client = String(req.headers["x-winreclaim-client"] || "");
-  if (!client.startsWith("desktop/")) {
+  if (!/^desktop\/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(client)) {
     return res.status(403).json({ error: "Unsupported client" });
   }
 
@@ -54,8 +55,23 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Invalid JSON body" });
   }
 
-  if (!body || typeof body !== "object" || JSON.stringify(body).length > MAX_BODY_CHARS) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
+  let serializedBody;
+  try {
+    serializedBody = JSON.stringify(body);
+  } catch {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+  if (serializedBody.length > MAX_BODY_CHARS) {
     return res.status(413).json({ error: "Request is too large" });
+  }
+
+  const bodyKeys = Object.keys(body).sort();
+  if (bodyKeys.length !== 2 || bodyKeys[0] !== "data" || bodyKeys[1] !== "task") {
+    return res.status(400).json({ error: "Unexpected request fields" });
   }
 
   let request;
@@ -99,7 +115,7 @@ module.exports = async function handler(req, res) {
 
   const raw = await upstream.text();
   if (!upstream.ok) {
-    console.error("OpenRouter rejected request", upstream.status, raw.slice(0, 600));
+    console.error("OpenRouter rejected request", upstream.status, boundedText(raw, 600));
     const status = upstream.status === 429 ? 429 : 502;
     return res.status(status).json({
       error: upstream.status === 429
@@ -112,24 +128,25 @@ module.exports = async function handler(req, res) {
     const envelope = JSON.parse(raw);
     const content = completionText(envelope?.choices?.[0]?.message?.content);
     const result = JSON.parse(content);
-    validateResult(body.task, result, body.data);
+    validateResult(body.task, result, request.allowedCandidateIds);
     return res.status(200).json({
-      model: String(envelope.model || MODEL),
+      model: String(envelope.model || MODEL).slice(0, 160),
       result
     });
   } catch (error) {
-    console.error("Invalid structured model response", boundedError(error), raw.slice(0, 600));
+    console.error("Invalid structured model response", boundedError(error));
     return res.status(502).json({ error: "The routed model returned an invalid structured response" });
   }
-};
+}
 
 function buildRequest(task, data) {
   if (task === "storage_summary") {
-    validateStoragePayload(data);
+    const safeData = normalizeStoragePayload(data);
     return {
       schemaName: "winreclaim_storage_summary",
       schema: storageSchema,
       maxTokens: 650,
+      allowedCandidateIds: null,
       messages: [
         {
           role: "system",
@@ -145,19 +162,20 @@ function buildRequest(task, data) {
         },
         {
           role: "user",
-          content: `Summarize this anonymized Windows storage scan metadata:\n${JSON.stringify(data)}`
+          content: `Summarize this anonymized Windows storage scan metadata:\n${JSON.stringify(safeData)}`
         }
       ]
     };
   }
 
   if (task === "intent_constraints") {
-    validateIntentPayload(data);
-    const candidateIds = data.candidates.map((candidate) => candidate.candidate_id);
+    const safeData = normalizeIntentPayload(data);
+    const candidateIds = safeData.candidates.map((candidate) => candidate.candidate_id);
     return {
       schemaName: "winreclaim_intent_constraints",
       schema: intentSchema(candidateIds),
       maxTokens: 500,
+      allowedCandidateIds: new Set(candidateIds),
       messages: [
         {
           role: "system",
@@ -173,7 +191,7 @@ function buildRequest(task, data) {
         },
         {
           role: "user",
-          content: `User request:\n${data.prompt}\n\nAnonymized cleanup candidates:\n${JSON.stringify(data.candidates)}`
+          content: `User request:\n${safeData.prompt}\n\nAnonymized cleanup candidates:\n${JSON.stringify(safeData.candidates)}`
         }
       ]
     };
@@ -214,49 +232,109 @@ function intentSchema(candidateIds) {
   };
 }
 
-function validateStoragePayload(data) {
-  if (!data || typeof data !== "object") throw new Error("Storage metadata is required");
-  for (const field of ["used_bytes", "free_bytes", "total_bytes", "drive_count", "scanned_entries", "skipped_entries"]) {
+function normalizeStoragePayload(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Storage metadata is required");
+  }
+
+  const numberFields = ["used_bytes", "free_bytes", "total_bytes", "drive_count", "scanned_entries", "skipped_entries"];
+  for (const field of numberFields) {
     if (!Number.isFinite(data[field]) || data[field] < 0) throw new Error(`Invalid ${field}`);
   }
+  if (typeof data.rows_may_overlap !== "boolean") throw new Error("Invalid rows_may_overlap");
   if (!Array.isArray(data.categories) || data.categories.length > 40) {
     throw new Error("Invalid storage categories");
   }
-  for (const category of data.categories) {
-    if (!category || typeof category.category !== "string" || category.category.length > 80) {
+
+  const categories = data.categories.map((category) => {
+    if (!category || typeof category !== "object" || Array.isArray(category)) {
+      throw new Error("Invalid storage category");
+    }
+    if (typeof category.category !== "string" || !category.category.trim() || category.category.length > 80) {
       throw new Error("Invalid storage category");
     }
     for (const field of ["bytes", "locations", "actionable_locations"]) {
       if (!Number.isFinite(category[field]) || category[field] < 0) throw new Error(`Invalid category ${field}`);
     }
-  }
+    const risks = category.risk_counts;
+    if (!risks || typeof risks !== "object" || Array.isArray(risks)) throw new Error("Invalid risk counts");
+    const riskCounts = {};
+    for (const field of ["safe_now", "rebuild_or_redownload", "review_first", "protected"]) {
+      if (!Number.isFinite(risks[field]) || risks[field] < 0) throw new Error(`Invalid risk count ${field}`);
+      riskCounts[field] = risks[field];
+    }
+    return {
+      category: category.category.trim(),
+      bytes: category.bytes,
+      locations: category.locations,
+      actionable_locations: category.actionable_locations,
+      risk_counts: riskCounts
+    };
+  });
+
+  return {
+    used_bytes: data.used_bytes,
+    free_bytes: data.free_bytes,
+    total_bytes: data.total_bytes,
+    drive_count: data.drive_count,
+    scanned_entries: data.scanned_entries,
+    skipped_entries: data.skipped_entries,
+    rows_may_overlap: data.rows_may_overlap,
+    categories
+  };
 }
 
-function validateIntentPayload(data) {
-  if (!data || typeof data !== "object") throw new Error("Intent metadata is required");
+function normalizeIntentPayload(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Intent metadata is required");
+  }
   if (typeof data.prompt !== "string" || !data.prompt.trim() || data.prompt.length > 1000) {
     throw new Error("Invalid reclaim request");
   }
   if (!Array.isArray(data.candidates) || !data.candidates.length || data.candidates.length > 200) {
     throw new Error("Invalid cleanup candidates");
   }
+
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  for (const candidate of data.candidates) {
-    if (!candidate || !uuid.test(String(candidate.candidate_id || ""))) throw new Error("Invalid candidate ID");
-    if (typeof candidate.category !== "string" || candidate.category.length > 100) throw new Error("Invalid candidate category");
-    if (!Number.isFinite(candidate.size_bytes) || candidate.size_bytes < 0) throw new Error("Invalid candidate size");
+  const seenIds = new Set();
+  const candidates = data.candidates.map((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      throw new Error("Invalid cleanup candidate");
+    }
+    const id = String(candidate.candidate_id || "");
+    if (!uuid.test(id) || seenIds.has(id)) throw new Error("Invalid candidate ID");
+    seenIds.add(id);
+    if (typeof candidate.category !== "string" || !candidate.category.trim() || candidate.category.length > 100) {
+      throw new Error("Invalid candidate category");
+    }
+    if (!Number.isFinite(candidate.size_bytes) || candidate.size_bytes < 0) {
+      throw new Error("Invalid candidate size");
+    }
     if (!["safe_now", "rebuild_or_redownload", "review_first"].includes(candidate.risk_class)) {
       throw new Error("Invalid candidate risk class");
     }
-    if (typeof candidate.consequence !== "string" || candidate.consequence.length > 300) {
+    if (!["temporary_or_disposable", "requires_rebuild_or_redownload", "may_disrupt_environment"].includes(candidate.consequence)) {
       throw new Error("Invalid candidate consequence");
     }
-  }
+    return {
+      candidate_id: id,
+      category: candidate.category.trim(),
+      size_bytes: candidate.size_bytes,
+      risk_class: candidate.risk_class,
+      consequence: candidate.consequence
+    };
+  });
+
+  return { prompt: data.prompt.trim(), candidates };
 }
 
-function validateResult(task, result, data) {
-  if (!result || typeof result !== "object") throw new Error("Structured result is missing");
+function validateResult(task, result, allowedCandidateIds) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("Structured result is missing");
+  }
+
   if (task === "storage_summary") {
+    assertExactKeys(result, ["observations", "summary"]);
     if (typeof result.summary !== "string" || result.summary.length < 20 || result.summary.length > 1000) {
       throw new Error("Invalid summary");
     }
@@ -266,11 +344,11 @@ function validateResult(task, result, data) {
     return;
   }
 
-  const allowedIds = new Set(data.candidates.map((candidate) => candidate.candidate_id));
+  assertExactKeys(result, ["allowed_risk_classes", "excluded_candidate_ids", "summary", "target_reclaim_bytes"]);
   if (!Array.isArray(result.allowed_risk_classes) || result.allowed_risk_classes.some((value) => !["safe_now", "rebuild_or_redownload", "review_first"].includes(value))) {
     throw new Error("Invalid allowed risk classes");
   }
-  if (!Array.isArray(result.excluded_candidate_ids) || result.excluded_candidate_ids.some((value) => !allowedIds.has(value))) {
+  if (!Array.isArray(result.excluded_candidate_ids) || result.excluded_candidate_ids.some((value) => !allowedCandidateIds?.has(value))) {
     throw new Error("Invalid excluded candidate IDs");
   }
   if (result.target_reclaim_bytes !== null && (!Number.isInteger(result.target_reclaim_bytes) || result.target_reclaim_bytes < 0)) {
@@ -278,6 +356,13 @@ function validateResult(task, result, data) {
   }
   if (typeof result.summary !== "string" || result.summary.length < 8 || result.summary.length > 500) {
     throw new Error("Invalid intent summary");
+  }
+}
+
+function assertExactKeys(value, expected) {
+  const actual = Object.keys(value).sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new Error("Structured response contained unexpected fields");
   }
 }
 
@@ -293,11 +378,18 @@ function completionText(content) {
 
 function clientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || req.headers["x-vercel-forwarded-for"] || "unknown");
-  return forwarded.split(",")[0].trim();
+  return forwarded.split(",")[0].trim().slice(0, 128);
 }
 
 function allowRequest(ip) {
   const now = Date.now();
+  if (requestsByIp.size >= MAX_RATE_KEYS) {
+    for (const [key, value] of requestsByIp) {
+      if (now - value.startedAt >= RATE_WINDOW_MS) requestsByIp.delete(key);
+    }
+    if (requestsByIp.size >= MAX_RATE_KEYS) requestsByIp.clear();
+  }
+
   const existing = requestsByIp.get(ip);
   if (!existing || now - existing.startedAt >= RATE_WINDOW_MS) {
     requestsByIp.set(ip, { startedAt: now, count: 1 });
@@ -310,4 +402,8 @@ function allowRequest(ip) {
 
 function boundedError(error) {
   return String(error instanceof Error ? error.message : error).slice(0, 500);
+}
+
+function boundedText(value, max) {
+  return String(value).replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]").slice(0, max);
 }
