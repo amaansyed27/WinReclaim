@@ -1,12 +1,12 @@
 # Troubleshooting
 
-This guide covers development, scanning, cleanup, optional-model and release problems. Remove private paths and credentials before sharing logs.
+This guide covers development, scanning, cleanup, cloud assistance and release problems. Remove private paths and credentials before sharing logs.
 
 ## Development build problems
 
 ### `npm` cannot find a script or package
 
-Confirm that PowerShell is in the repository root:
+Run from the repository root:
 
 ```powershell
 Get-Location
@@ -14,28 +14,21 @@ Get-Content .\package.json
 npm ci
 ```
 
-Delete only generated dependency state when necessary:
+When needed, remove only generated dependencies:
 
 ```powershell
 Remove-Item .\node_modules -Recurse -Force -ErrorAction SilentlyContinue
 npm ci
 ```
 
-Do not delete `package-lock.json` to work around a dependency error unless the dependency set is intentionally being changed.
+Do not delete `package-lock.json` unless intentionally changing dependencies.
 
 ### Rust uses the GNU toolchain
-
-WinReclaim expects MSVC on Windows:
 
 ```powershell
 rustup default stable-x86_64-pc-windows-msvc
 rustup target add x86_64-pc-windows-msvc
 rustup component add rustfmt clippy
-```
-
-Check:
-
-```powershell
 rustc -vV
 ```
 
@@ -43,242 +36,183 @@ The host should include `x86_64-pc-windows-msvc`.
 
 ### Linker or Windows SDK errors
 
-Open **Visual Studio Installer** and ensure **Desktop development with C++** and a current Windows SDK are installed. Restart PowerShell after changing Build Tools.
+Install **Desktop development with C++**, MSVC x64/x86 tools and a current Windows SDK through Visual Studio Installer. Restart PowerShell afterward.
 
-Typical missing components include:
-
-- MSVC x64/x86 build tools;
-- Windows 10/11 SDK;
-- C++ CMake tools when a dependency requires them.
-
-The normal WinReclaim build does not require an embedded `llama.cpp` C++ build; the optional assistant uses a downloaded sidecar.
+WinReclaim does not compile or launch a local model runtime.
 
 ### WebView2 errors
 
-Install or repair Microsoft Edge WebView2 Runtime. Tauri uses WebView2 for the desktop UI.
+Install or repair Microsoft Edge WebView2 Runtime.
 
 ### Port `1420` is already in use
-
-Stop the previous Vite/Tauri process:
 
 ```powershell
 Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue |
   Select-Object -ExpandProperty OwningProcess -Unique |
   ForEach-Object { Stop-Process -Id $_ -Force }
-```
 
-Then restart:
-
-```powershell
 npm run tauri dev
 ```
 
-## Application launch and UI
+## Launch and UI
 
 ### Two windows or a console window appear
 
-Development builds can show additional process windows depending on how the application and sidecars are launched. Verify the packaged release before treating development console behaviour as a shipping regression.
-
-If a second WinReclaim UI window appears, check `tauri.conf.json` and runtime window creation code for duplicate labels.
+Development builds can show a console because they are started from PowerShell. The packaged GUI release should not open a local-model sidecar or second console. If a second WinReclaim window appears, inspect `tauri.conf.json` and duplicate window labels.
 
 ### Blank window
-
-Run frontend validation:
 
 ```powershell
 npm run check
 npm run build
-```
-
-Then enable a Rust backtrace:
-
-```powershell
 $env:RUST_BACKTRACE="1"
 npm run tauri dev
 ```
 
-Inspect the webview developer console for JavaScript errors and the PowerShell window for Tauri command failures.
+Inspect both the webview console and PowerShell output.
 
 ## Scan problems
 
 ### No drives are listed
 
-- Confirm the process is running as the same user who can see the drive.
-- Verify the drive is mounted and has a Windows drive letter.
-- Check whether it is fixed, removable or network storage.
-- Restart after attaching a new drive.
-
-Removable and network drives may be inspection-only by design.
+Confirm that the drive is mounted, has a drive letter and is visible to the current user. Removable and network drives may be inspection-only by policy.
 
 ### A scan appears stuck
 
-Deep and Ultra scans can inspect many directories. Check the current progress phase and discovered bytes. Try:
+1. Cancel it.
+2. Run Quick on one fixed drive.
+3. Disable broad AppData/dynamic discovery.
+4. Check the drive for access/filesystem errors.
+5. Record the sanitized progress phase if the same target repeatedly stalls.
 
-1. cancel the scan;
-2. run Quick on one fixed drive;
-3. exclude broad AppData/dynamic discovery;
-4. check the drive for filesystem or access errors;
-5. capture sanitized progress details if the same target always stalls.
-
-Locked and inaccessible entries should be skipped rather than blocking indefinitely. Report repeatable hangs.
+Locked and inaccessible entries should be skipped.
 
 ### A large folder is missing
 
-Possible reasons:
+It may be below the threshold, outside selected roots, excluded by the profile, protected, behind a reparse point, inaccessible or beyond the dynamic-result limit. Broader discovery never automatically grants cleanup authority.
 
-- it is below the selected minimum size;
-- the scan profile does not include that category;
-- the path is outside selected drives/roots;
-- the result limit was reached;
-- the folder is protected or part of WinReclaim-owned state;
-- it is behind a reparse point;
-- a permissions error prevented sizing.
+### Timeline shows no change
 
-Use Deep or Ultra for broader inspection, but do not assume missing results should automatically become actionable.
-
-### The timeline shows no change
-
-The first scan creates a baseline. Later scans produce deltas only when their roots, profile, options, thresholds, schema and rule-set version are compatible.
-
-A snapshot can be displayed while being ineligible for comparison.
+The first scan is a baseline. Later deltas require compatible roots, profile, options, thresholds, schema and rule-set version.
 
 ## Planning and cleanup
 
 ### A finding cannot be selected
 
-The backend may mark it inspection-only, review-only or protected. This is expected for unknown folders, removable/network storage and sensitive tool data.
+It may be inspection-only, review-first, protected, on unsupported drive storage or missing a compiled adapter. There is no “ignore safety” switch.
 
-WinReclaim does not provide an “ignore safety” switch. Inspect the path and use the owning tool's supported management interface when necessary.
+### Estimate differs from receipt
 
-### Estimated reclaim differs from the receipt
-
-The plan contains estimates measured before execution. Files can change, be locked, be removed by another process or compress differently. The receipt reports measured free-space change and action results.
+Plans contain pre-execution estimates. Files can change, become locked, be removed elsewhere or compress differently. The receipt's measured result is authoritative.
 
 ### Cleanup skips files
 
-Common causes:
+Common causes: active/locked files, permissions, reparse points, stale fingerprints, protected overlaps or antivirus locks. Close the owning program and rescan rather than broadening deletion manually.
 
-- active/locked files;
-- insufficient permissions;
-- reparse points;
-- path/fingerprint changed after scan;
-- destination moved outside an allowed root;
-- antivirus or another process holding a file.
+### Tool-native command fails
 
-Skipped files are safer than forcing removal. Close the owning application and rescan rather than manually broadening permissions.
-
-### A tool-native cleanup command fails
-
-Run the owning tool directly only after reviewing its own documentation. Examples such as npm, Hugging Face or Docker may require the tool to be installed, on PATH and in a healthy state.
-
-Do not replace a failed command with raw recursive deletion without understanding the consequence.
+Confirm that the owning tool is installed and healthy. Do not replace a failed npm, Hugging Face or Docker command with raw recursive deletion.
 
 ## Undo Vault
 
 ### Restore is unavailable
 
-The entry may be expired, incomplete, missing its payload or already restored. Check the entry status and expiry timestamp.
+The entry may be expired, incomplete, missing its payload or already restored.
 
-### Restore refuses to overwrite a file
+### Restore refuses to overwrite
 
-This is intentional. Move or rename the existing destination after confirming its contents, then retry. WinReclaim never overwrites a file created after cleanup.
+Intentional. Review and move/rename the existing destination, then retry. WinReclaim never overwrites a post-cleanup file.
 
-### Vault cleanup did not free the estimated space
+### Vault action freed less than its original size
 
-Moving files within the same volume does not free space. Net reclaim depends on NTFS compression and filesystem allocation. Use the measured receipt rather than the original item size.
+Moving files within one volume does not itself free space. Net reclaim depends on NTFS compression and allocation. Use the measured receipt.
 
-## Optional Storage Assistant
+## Optional cloud assistant
 
-### Installation fails
+### “Cloud assistant is not configured”
 
-Check:
-
-- internet access to GitHub and Hugging Face;
-- available disk space;
-- antivirus quarantine;
-- whether a partial model/runtime directory exists;
-- the exact hash or archive error.
-
-Retry through Settings. Do not disable hash verification.
-
-### Model verifies but inference fails
-
-Possible causes:
-
-- runtime executable quarantined or blocked;
-- insufficient memory;
-- sidecar process timeout;
-- corrupted manifest;
-- unsupported CPU/runtime artifact;
-- model/runtime version mismatch.
-
-Uninstall the assistant from Settings and reinstall the pinned artifacts. Core scanning remains available without it.
-
-### Assistant output is missing annotations
-
-The validator discards unsupported finding IDs, deletion claims, invalid groups and low-value annotations for already-clear findings. A short or empty advisory result can be correct.
-
-## Optional OpenAI intent feature
-
-### Feature reports no API key
-
-Set the key in the same PowerShell process before launching:
+The Vercel project is missing its server-side key. From `landing-page`:
 
 ```powershell
-$env:OPENAI_API_KEY="your-key"
+vercel link --project winreclaim
+vercel env add OPENROUTER_API_KEY production
+vercel env add OPENROUTER_API_KEY preview
+vercel --prod
+```
+
+Enter the key only in the interactive prompt. Do not add it to desktop source, frontend JavaScript, Tauri configuration, GitHub issues or screenshots.
+
+### Preview endpoint is not used
+
+Set the override in the same PowerShell process before launch:
+
+```powershell
+$env:WINRECLAIM_ASSISTANT_URL="https://your-preview-domain.vercel.app/api/assistant"
 npm run tauri dev
 ```
 
-Do not put the key in frontend source or commit it to the repository.
+Only HTTPS overrides are accepted.
 
-### API failure blocks suggestions
+### Free model capacity is busy / HTTP 429
 
-The feature is optional. Continue with manual finding selection. Check network access, key validity, model configuration and API response errors. Never expose the key in an issue.
+OpenRouter free-model capacity varies. Wait briefly and retry. Do not enable an unbounded paid fallback on the judging key. Manual scanning, selection and cleanup remain available.
 
-## Installer and update problems
+### The assistant returns HTTP 403
+
+The proxy requires the WinReclaim desktop client contract. Verify that the request originates through current Rust `cloud.rs`, not a browser form or stale client build.
+
+### The assistant returns HTTP 502
+
+Possible causes:
+
+- OpenRouter or a routed provider is temporarily unavailable;
+- no available free model supports required structured parameters;
+- upstream returned malformed structured output;
+- the proxy deployment is stale.
+
+Redeploy the current `landing-page` root, inspect bounded Vercel logs and retry. Never print the provider key or full private payload.
+
+### Summary failed validation
+
+The proxy and Rust reject malformed output, unsupported candidate IDs/classes and deletion claims. The deterministic scan is unaffected. This is a safe failure, not a reason to weaken validation.
+
+### Old Qwen/`llama.cpp` files remain
+
+Version 1.2.1 removes the retired directory at startup. After closing WinReclaim, manual removal is safe:
+
+```powershell
+Remove-Item -LiteralPath "$env:LOCALAPPDATA\WinReclaim\models\storage-assistant" -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+This does not remove snapshots, receipts or Undo Vault payloads.
+
+## Installer and updater
 
 ### Windows shows “Unknown publisher”
 
-Tauri updater signatures verify update integrity but are not Windows Authenticode publisher signatures. An installer without an Authenticode certificate can trigger SmartScreen or an unknown-publisher warning.
+Tauri updater signatures verify update integrity but are not Authenticode publisher signatures. Download only from the official GitHub Release.
 
-Download only from the official GitHub Release and verify the repository/tag.
+### Updater signature is invalid
 
-### Updater says signature is invalid
-
-Do not bypass verification. Check that:
-
-- the installed application contains the expected public key;
-- the release was signed with the matching private key;
-- `latest.json` references the correct asset and signature;
-- the asset was not replaced after the manifest was generated;
-- the release is not mixing keys from different builds.
-
-A rotated updater key cannot update installations that trust the old public key unless a signed transition was planned in advance.
+Do not bypass verification. Confirm the embedded public key, matching private signing key, correct `latest.json`, unchanged assets and consistent key lineage.
 
 ### Release workflow rejects the version
 
-Use semantic version text without the `v` prefix, for example:
-
-```text
-1.2.0
-1.2.1-beta.1
-```
-
-Do not reuse an existing tag. The release workflow creates the tag.
+Use a new semantic version without `v`, such as `1.2.1` or `1.2.2-beta.1`. Do not reuse an existing tag.
 
 ### Release workflow cannot push the version commit
 
-A concurrent commit may have reached `main` after the workflow checked it out. Avoid merging to `main` while a release run is between checkout and version commit. Rerun after synchronizing the branch.
+A concurrent `main` update may have landed after checkout. Avoid merging while a release is between checkout and version commit; rerun after synchronization.
 
-## Collecting diagnostics
-
-Useful commands:
+## Diagnostics
 
 ```powershell
 npm run check
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-When reporting a problem, include the command, error, version and sanitized environment details. Follow [SUPPORT.md](../SUPPORT.md) and [SECURITY.md](../SECURITY.md).
+When reporting a problem, include the command, application version, sanitized error and environment details. Follow [SUPPORT.md](../SUPPORT.md) and [SECURITY.md](../SECURITY.md).
