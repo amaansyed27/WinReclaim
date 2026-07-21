@@ -28,14 +28,14 @@ struct IntentCandidate {
     category: String,
     size_bytes: u64,
     risk_class: &'static str,
-    consequence: String,
+    consequence: &'static str,
 }
 
 pub fn ai_status() -> AiStatus {
     AiStatus {
         configured: cloud::assistant_endpoint().starts_with("https://"),
         model: ROUTER_MODEL.to_string(),
-        privacy_note: "Requests use the WinReclaim cloud proxy and OpenRouter's free model router. Candidate IDs, category, size, risk and consequence are sent; paths, usernames, folder names, project names and file contents stay local."
+        privacy_note: "Requests use the WinReclaim cloud proxy and OpenRouter's free model router. Candidate IDs, category, size, deterministic risk and a generic consequence class are sent; paths, usernames, folder names, project names and file contents stay local."
             .to_string(),
     }
 }
@@ -54,7 +54,7 @@ pub(crate) fn request_constraints(
                 category: finding.category.clone(),
                 size_bytes: finding.estimated_bytes,
                 risk_class: risk_name(finding.risk_class),
-                consequence: finding.consequence.clone(),
+                consequence: consequence_name(finding.risk_class),
             })
             .collect(),
     };
@@ -68,6 +68,15 @@ fn risk_name(risk: RiskClass) -> &'static str {
         RiskClass::SafeNow => "safe_now",
         RiskClass::RebuildOrRedownload => "rebuild_or_redownload",
         RiskClass::ReviewFirst => "review_first",
+        RiskClass::Protected => "protected",
+    }
+}
+
+fn consequence_name(risk: RiskClass) -> &'static str {
+    match risk {
+        RiskClass::SafeNow => "temporary_or_disposable",
+        RiskClass::RebuildOrRedownload => "requires_rebuild_or_redownload",
+        RiskClass::ReviewFirst => "may_disrupt_environment",
         RiskClass::Protected => "protected",
     }
 }
