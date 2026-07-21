@@ -2,15 +2,19 @@ use super::discovery::{discover_unknown_directories, DiscoveryOptions};
 use super::sizing::{directory_size, recognised_dump_size, recycle_bin_size};
 use super::system_cache::{discover_system_drive_caches, SystemCacheOptions};
 use crate::domain::{
-    ActionKind, Finding, RiskClass, ScanMode, ScanProgress, ScanReport, ScanRequest,
+    ActionKind, DiskSnapshot, DriveInfo, DriveKind, Finding, RiskClass, ScanMode, ScanProgress,
+    ScanReport, ScanRequest,
 };
-use crate::platform::windows::{command_succeeds, disk_snapshot, system_cache_roots, user_profile};
+use crate::platform::windows::{
+    command_succeeds, disk_snapshot, drive_root, list_drives, same_drive, system_cache_roots,
+    system_drive_root, user_profile,
+};
 use crate::policy::scan_scope_fingerprint;
 use crate::rules::known_targets;
 use crate::storage::AppState;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter};
@@ -21,26 +25,117 @@ type ProgressCounts = (usize, usize, u64, u64);
 pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> Result<ScanReport> {
     state.cancel_scan.store(false, Ordering::Relaxed);
     let started_at = Utc::now();
-    let default_profile_scan = request.root.is_none();
-    let root = request
-        .root
-        .clone()
-        .map(PathBuf::from)
-        .unwrap_or(user_profile()?);
-
-    if !root.exists() || !root.is_dir() {
-        return Err(anyhow!("Scan root is not an accessible directory"));
+    let available_drives = list_drives()?;
+    let roots = resolve_roots(&request, &available_drives)?;
+    if roots.is_empty() {
+        return Err(anyhow!("Select at least one accessible drive"));
     }
 
+    let selected_drives = selected_drive_info(&roots, &available_drives)?;
+    let mut findings_by_key = HashMap::<String, Finding>::new();
+    let mut scanned_entries = 0_u64;
+    let mut skipped_entries = 0_u64;
+    let mut errors = Vec::new();
+
+    for (index, root) in roots.iter().enumerate() {
+        if state.cancel_scan.load(Ordering::Relaxed) {
+            return Err(anyhow!("Scan cancelled"));
+        }
+        let drive = selected_drives
+            .iter()
+            .find(|drive| same_drive(Path::new(&drive.root), root));
+        let mut partial = scan_single_root(
+            app,
+            state,
+            &request,
+            root,
+            index + 1,
+            roots.len(),
+            drive.map(|value| value.kind),
+        )?;
+        scanned_entries = scanned_entries.saturating_add(partial.scanned_entries);
+        skipped_entries = skipped_entries.saturating_add(partial.skipped_entries);
+        errors.append(&mut partial.errors);
+        for finding in partial.findings {
+            let key = format!(
+                "{}|{}",
+                finding.rule_id,
+                finding.path.to_ascii_lowercase()
+            );
+            findings_by_key
+                .entry(key)
+                .and_modify(|existing| {
+                    if finding.estimated_bytes > existing.estimated_bytes {
+                        *existing = finding.clone();
+                    }
+                })
+                .or_insert(finding);
+        }
+    }
+
+    let mut findings = findings_by_key.into_values().collect::<Vec<_>>();
+    findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
+    let disk = aggregate_disk(&selected_drives);
+    let scope_fingerprint = scan_scope_fingerprint(&roots, &selected_drives, &request);
+    let root_label = roots
+        .iter()
+        .map(|root| root.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(";");
+
+    let report = ScanReport {
+        scan_id: Uuid::new_v4(),
+        started_at,
+        completed_at: Utc::now(),
+        root: root_label,
+        drives: selected_drives,
+        scope_fingerprint,
+        disk,
+        findings,
+        scanned_entries,
+        skipped_entries,
+        errors,
+    };
+
+    emit_progress(
+        app,
+        "Scan complete",
+        None,
+        (roots.len(), roots.len(), report.disk.used_bytes, scanned_entries),
+    );
+    Ok(report)
+}
+
+fn scan_single_root(
+    app: &AppHandle,
+    state: &AppState,
+    request: &ScanRequest,
+    root: &Path,
+    drive_index: usize,
+    drive_count: usize,
+    drive_kind: Option<DriveKind>,
+) -> Result<PartialScan> {
+    if !root.exists() || !root.is_dir() {
+        return Err(anyhow!(
+            "Scan root {} is not an accessible directory",
+            root.display()
+        ));
+    }
+
+    let system_selected = same_drive(root, &system_drive_root()?);
+    let profile_scan = request.roots.is_empty() && request.root.is_none();
     let mode = mode_limits(request.mode);
     let targets = known_targets()?
         .into_iter()
         .filter(|target| {
-            let profile_target = request.include_known_targets && target.path.starts_with(&root);
-            let system_target = default_profile_scan
+            let selected_target = request.include_known_targets && target.path.starts_with(root);
+            let system_target = system_selected
                 && request.include_system_drive_caches
                 && target.rule_id.starts_with("system_drive.");
-            profile_target || system_target
+            let profile_target = profile_scan
+                && request.include_known_targets
+                && target.path.starts_with(user_profile().unwrap_or_default());
+            selected_target || system_target || profile_target
         })
         .collect::<Vec<_>>();
     let known_paths = targets
@@ -48,25 +143,26 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         .map(|target| target.path.clone())
         .collect::<Vec<_>>();
     let project_roots = if request.include_project_outputs {
-        project_roots(&root)
+        project_roots(root)
     } else {
         Vec::new()
     };
     let total_targets = targets.len()
         + project_roots.len()
         + usize::from(request.discover_unknown)
-        + usize::from(default_profile_scan && request.include_system_drive_caches);
+        + usize::from(system_selected && request.include_system_drive_caches);
     let mut findings = Vec::new();
     let mut scanned_entries = 0_u64;
     let mut skipped_entries = 0_u64;
     let mut discovered_bytes = 0_u64;
     let mut completed_targets = 0_usize;
     let mut errors = Vec::new();
+    let prefix = format!("Drive {drive_index} of {drive_count}");
 
     emit_progress(
         app,
-        "Inspecting verified storage locations",
-        Some(&root),
+        &format!("{prefix}: inspecting verified storage locations"),
+        Some(root),
         (
             completed_targets,
             total_targets,
@@ -81,7 +177,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         }
         emit_progress(
             app,
-            "Inspecting verified storage locations",
+            &format!("{prefix}: inspecting verified storage locations"),
             Some(&target.path),
             (
                 completed_targets,
@@ -104,6 +200,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             if let Some(action) = finding.action_kind {
                 finding.action_available = action_is_available(action);
             }
+            apply_drive_safety(&mut finding, drive_kind);
             findings.push(finding);
         }
     }
@@ -115,7 +212,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         }
         emit_progress(
             app,
-            "Discovering project output",
+            &format!("{prefix}: discovering project output"),
             Some(&project_root),
             (
                 completed_targets,
@@ -132,6 +229,9 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             request.minimum_finding_bytes.max(64 * 1024 * 1024),
         ) {
             Ok((mut output_findings, entries, skipped, bytes)) => {
+                for finding in &mut output_findings {
+                    apply_drive_safety(finding, drive_kind);
+                }
                 findings.append(&mut output_findings);
                 scanned_entries = scanned_entries.saturating_add(entries);
                 skipped_entries = skipped_entries.saturating_add(skipped);
@@ -145,8 +245,8 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
     if request.discover_unknown {
         emit_progress(
             app,
-            "Discovering unclassified large directories",
-            Some(&root),
+            &format!("{prefix}: discovering large directories"),
+            Some(root),
             (
                 completed_targets,
                 total_targets,
@@ -156,8 +256,8 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         );
         let mut excluded = known_paths.clone();
         excluded.extend(seen_project_outputs.iter().cloned());
-        let dynamic = discover_unknown_directories(
-            &root,
+        let mut dynamic = discover_unknown_directories(
+            root,
             &excluded,
             &state.cancel_scan,
             DiscoveryOptions {
@@ -172,9 +272,13 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         );
         if dynamic.entry_limit_reached {
             errors.push(format!(
-                "Dynamic discovery reached the {:?} scan entry limit; use Deep mode for broader coverage.",
+                "{} discovery reached the {:?} scan entry limit; use Deep mode for broader coverage.",
+                root.display(),
                 request.mode
             ));
+        }
+        for finding in &mut dynamic.findings {
+            apply_drive_safety(finding, drive_kind);
         }
         scanned_entries = scanned_entries.saturating_add(dynamic.scanned_entries);
         skipped_entries = skipped_entries.saturating_add(dynamic.skipped_entries);
@@ -182,10 +286,10 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
         findings.extend(dynamic.findings);
     }
 
-    if default_profile_scan && request.include_system_drive_caches {
+    if system_selected && request.include_system_drive_caches {
         emit_progress(
             app,
-            "Checking caches on the Windows drive",
+            &format!("{prefix}: checking caches on the Windows drive"),
             None,
             (
                 completed_targets,
@@ -195,7 +299,7 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
             ),
         );
         let roots = system_cache_roots()?;
-        let system_caches = discover_system_drive_caches(
+        let mut system_caches = discover_system_drive_caches(
             &roots,
             &known_paths,
             &state.cancel_scan,
@@ -214,38 +318,131 @@ pub fn scan_profile(app: &AppHandle, state: &AppState, request: ScanRequest) -> 
                 request.mode
             ));
         }
+        for finding in &mut system_caches.findings {
+            apply_drive_safety(finding, drive_kind);
+        }
         scanned_entries = scanned_entries.saturating_add(system_caches.scanned_entries);
         skipped_entries = skipped_entries.saturating_add(system_caches.skipped_entries);
         discovered_bytes = discovered_bytes.saturating_add(system_caches.discovered_bytes);
         findings.extend(system_caches.findings);
     }
 
-    findings.sort_by_key(|finding| std::cmp::Reverse(finding.estimated_bytes));
-    let report = ScanReport {
-        scan_id: Uuid::new_v4(),
-        started_at,
-        completed_at: Utc::now(),
-        root: root.to_string_lossy().to_string(),
-        scope_fingerprint: scan_scope_fingerprint(&root, &request),
-        disk: disk_snapshot(&root)?,
+    Ok(PartialScan {
         findings,
         scanned_entries,
         skipped_entries,
         errors,
+    })
+}
+
+#[derive(Debug)]
+struct PartialScan {
+    findings: Vec<Finding>,
+    scanned_entries: u64,
+    skipped_entries: u64,
+    errors: Vec<String>,
+}
+
+fn resolve_roots(request: &ScanRequest, drives: &[DriveInfo]) -> Result<Vec<PathBuf>> {
+    let requested = if !request.roots.is_empty() {
+        request.roots.iter().map(PathBuf::from).collect::<Vec<_>>()
+    } else if let Some(root) = &request.root {
+        vec![PathBuf::from(root)]
+    } else {
+        vec![user_profile()?]
     };
 
-    emit_progress(
-        app,
-        "Scan complete",
-        None,
-        (
-            total_targets,
-            total_targets,
-            discovered_bytes,
-            scanned_entries,
-        ),
-    );
-    Ok(report)
+    let mut roots = Vec::new();
+    let mut seen = HashSet::new();
+    for requested_root in requested {
+        if !requested_root.exists() || !requested_root.is_dir() {
+            return Err(anyhow!(
+                "{} is not an accessible directory",
+                requested_root.display()
+            ));
+        }
+        let canonical = requested_root
+            .canonicalize()
+            .unwrap_or_else(|_| requested_root.clone());
+        let key = canonical.to_string_lossy().to_ascii_lowercase();
+        if seen.insert(key) {
+            roots.push(canonical);
+        }
+    }
+
+    if !request.roots.is_empty() {
+        for root in &roots {
+            if !drives
+                .iter()
+                .any(|drive| same_drive(Path::new(&drive.root), root))
+            {
+                return Err(anyhow!(
+                    "{} is not one of the currently mounted drives",
+                    root.display()
+                ));
+            }
+        }
+    }
+    roots.sort_by_key(|root| root.to_string_lossy().to_ascii_lowercase());
+    Ok(roots)
+}
+
+fn selected_drive_info(roots: &[PathBuf], drives: &[DriveInfo]) -> Result<Vec<DriveInfo>> {
+    let mut selected = Vec::new();
+    let mut seen = HashSet::new();
+    for root in roots {
+        let drive = drives
+            .iter()
+            .find(|drive| same_drive(Path::new(&drive.root), root))
+            .cloned()
+            .or_else(|| {
+                disk_snapshot(root).ok().map(|snapshot| DriveInfo {
+                    root: snapshot.root.clone(),
+                    label: String::new(),
+                    file_system: String::new(),
+                    volume_id: snapshot.root.clone(),
+                    total_bytes: snapshot.total_bytes,
+                    free_bytes: snapshot.free_bytes,
+                    used_bytes: snapshot.used_bytes,
+                    is_system: same_drive(root, &system_drive_root().unwrap_or_default()),
+                    kind: DriveKind::Fixed,
+                })
+            })
+            .ok_or_else(|| anyhow!("Unable to read drive information for {}", root.display()))?;
+        if seen.insert(drive.volume_id.clone()) {
+            selected.push(drive);
+        }
+    }
+    selected.sort_by_key(|drive| (!drive.is_system, drive.root.clone()));
+    Ok(selected)
+}
+
+fn aggregate_disk(drives: &[DriveInfo]) -> DiskSnapshot {
+    DiskSnapshot {
+        root: drives
+            .iter()
+            .map(|drive| drive.root.clone())
+            .collect::<Vec<_>>()
+            .join(";"),
+        total_bytes: drives.iter().map(|drive| drive.total_bytes).sum(),
+        free_bytes: drives.iter().map(|drive| drive.free_bytes).sum(),
+        used_bytes: drives.iter().map(|drive| drive.used_bytes).sum(),
+    }
+}
+
+fn apply_drive_safety(finding: &mut Finding, drive_kind: Option<DriveKind>) {
+    if matches!(
+        drive_kind,
+        Some(DriveKind::Network | DriveKind::Removable | DriveKind::Optical | DriveKind::Other)
+    ) {
+        finding.action_available = false;
+        if finding.risk_class != RiskClass::Protected {
+            finding.risk_class = RiskClass::ReviewFirst;
+        }
+        finding.consequence =
+            "This volume is inspection-only. WinReclaim does not clean removable or network storage."
+                .to_string();
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -283,7 +480,11 @@ fn mode_limits(mode: ScanMode) -> ModeLimits {
     }
 }
 
-fn project_roots(user: &Path) -> Vec<PathBuf> {
+fn project_roots(root: &Path) -> Vec<PathBuf> {
+    if root == drive_root(root) {
+        return vec![root.to_path_buf()];
+    }
+
     [
         "Desktop",
         "Documents",
@@ -292,11 +493,12 @@ fn project_roots(user: &Path) -> Vec<PathBuf> {
         "Source",
         "source",
         "dev",
+        "develop",
         "repos",
         "workspace",
     ]
     .into_iter()
-    .map(|name| user.join(name))
+    .map(|name| root.join(name))
     .filter(|path| path.exists() && path.is_dir())
     .collect()
 }
@@ -426,7 +628,9 @@ fn project_output_descriptor(
             "The environment must be recreated and dependencies reinstalled.",
             RiskClass::RebuildOrRedownload,
         )),
-        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage" if has_project_marker(parent) => {
+        "dist" | "build" | ".next" | ".nuxt" | "out" | "coverage"
+            if has_project_marker(parent) =>
+        {
             Some((
                 "project.build_output",
                 "Project build output",
@@ -512,5 +716,37 @@ mod tests {
         fs::write(project.join("package.json"), "{}").unwrap();
         assert!(project_output_descriptor(&modules, "node_modules").is_some());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn aggregate_disk_sums_selected_volumes() {
+        let drives = vec![
+            DriveInfo {
+                root: "C:\\".into(),
+                label: String::new(),
+                file_system: "NTFS".into(),
+                volume_id: "1".into(),
+                total_bytes: 100,
+                free_bytes: 40,
+                used_bytes: 60,
+                is_system: true,
+                kind: DriveKind::Fixed,
+            },
+            DriveInfo {
+                root: "D:\\".into(),
+                label: String::new(),
+                file_system: "NTFS".into(),
+                volume_id: "2".into(),
+                total_bytes: 200,
+                free_bytes: 50,
+                used_bytes: 150,
+                is_system: false,
+                kind: DriveKind::Fixed,
+            },
+        ];
+        let disk = aggregate_disk(&drives);
+        assert_eq!(disk.total_bytes, 300);
+        assert_eq!(disk.free_bytes, 90);
+        assert_eq!(disk.used_bytes, 210);
     }
 }
