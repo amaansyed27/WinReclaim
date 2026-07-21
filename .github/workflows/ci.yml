@@ -6,7 +6,62 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
+  cleanup-obsolete-actions:
+    name: Remove obsolete workflow history
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[cleanup-actions]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete runs for removed workflow files
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const response = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: '.github/workflows',
+              ref: 'main'
+            });
+
+            if (!Array.isArray(response.data)) {
+              core.setFailed('Unable to enumerate .github/workflows');
+              return;
+            }
+
+            const activePaths = new Set(
+              response.data
+                .filter((item) => item.type === 'file' && /\.ya?ml$/i.test(item.name))
+                .map((item) => item.path)
+            );
+
+            core.info(`Keeping workflow history for: ${[...activePaths].sort().join(', ')}`);
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              { owner, repo, per_page: 100 }
+            );
+
+            const obsoleteRuns = runs.filter(
+              (run) => run.status === 'completed' && run.path && !activePaths.has(run.path)
+            );
+
+            core.info(`Deleting ${obsoleteRuns.length} obsolete workflow runs.`);
+
+            for (const run of obsoleteRuns) {
+              core.info(`Deleting run ${run.id}: ${run.name} (${run.path})`);
+              await github.rest.actions.deleteWorkflowRun({
+                owner,
+                repo,
+                run_id: run.id
+              });
+            }
+
   validate:
     runs-on: windows-latest
     timeout-minutes: 25
