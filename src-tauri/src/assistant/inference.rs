@@ -2,17 +2,11 @@ use super::{BASE_MODEL, MODEL_NAME, QUANTIZATION};
 use crate::domain::{AssistantAnnotation, ScanReport, StorageAssistantReport};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use llama_cpp_2::context::params::LlamaContextParams;
-use llama_cpp_2::llama_backend::LlamaBackend;
-use llama_cpp_2::llama_batch::LlamaBatch;
-use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaModel};
-use llama_cpp_2::sampling::LlamaSampler;
-use llama_cpp_2::{send_logs_to_tracing, LogOptions};
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::num::NonZeroU32;
+use std::fs;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use uuid::Uuid;
 
 const CONTEXT_TOKENS: u32 = 8_192;
@@ -47,86 +41,94 @@ struct RawAnnotation {
     confidence: f32,
 }
 
-pub fn generate(model_path: &Path, prompt: &str, max_output_tokens: i32) -> Result<String> {
+pub fn generate(
+    runtime_path: &Path,
+    model_path: &Path,
+    prompt: &str,
+    max_output_tokens: i32,
+) -> Result<String> {
+    if !runtime_path.is_file() {
+        return Err(anyhow!(
+            "Install the optional Storage Assistant runtime in Settings before generating a report"
+        ));
+    }
     if !model_path.is_file() {
         return Err(anyhow!(
             "Install the optional Storage Assistant model in Settings before generating a report"
         ));
     }
-
-    send_logs_to_tracing(LogOptions::default().with_logs_enabled(false));
-    let backend = LlamaBackend::init().context("Unable to initialize the local model runtime")?;
-    let model_params = LlamaModelParams::default();
-    let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
-        .context("Unable to load the Storage Assistant model")?;
-
-    let threads = std::thread::available_parallelism()
-        .map(|count| count.get().min(8) as i32)
-        .unwrap_or(4);
-    let context_params = LlamaContextParams::default()
-        .with_n_ctx(Some(
-            NonZeroU32::new(CONTEXT_TOKENS).expect("context is non-zero"),
-        ))
-        .with_n_threads(threads)
-        .with_n_threads_batch(threads);
-    let mut context = model
-        .new_context(&backend, context_params)
-        .context("Unable to allocate local model context")?;
-
-    let prompt_tokens = model
-        .str_to_token(prompt, AddBos::Never)
-        .context("Unable to tokenize the storage report")?;
-    if prompt_tokens.is_empty() {
+    if prompt.trim().is_empty() {
         return Err(anyhow!("The Storage Assistant prompt was empty"));
     }
 
-    let max_context = i32::try_from(context.n_ctx()).unwrap_or(i32::MAX);
-    let requested = i32::try_from(prompt_tokens.len())?.saturating_add(max_output_tokens.max(1));
-    if requested > max_context {
+    let request_root = super::model_root().join("requests");
+    fs::create_dir_all(&request_root)?;
+    let prompt_path = request_root.join(format!("{}.txt", Uuid::new_v4()));
+    fs::write(&prompt_path, prompt).context("Unable to prepare the local assistant request")?;
+
+    let threads = std::thread::available_parallelism()
+        .map(|count| count.get().min(8))
+        .unwrap_or(4);
+    let mut command = Command::new(runtime_path);
+    command
+        .current_dir(runtime_path.parent().unwrap_or_else(|| Path::new(".")))
+        .arg("--model")
+        .arg(model_path)
+        .arg("--file")
+        .arg(&prompt_path)
+        .arg("--ctx-size")
+        .arg(CONTEXT_TOKENS.to_string())
+        .arg("--n-predict")
+        .arg(max_output_tokens.max(1).to_string())
+        .arg("--threads")
+        .arg(threads.to_string())
+        .arg("--temp")
+        .arg("0")
+        .arg("--no-conversation")
+        .arg("--single-turn")
+        .arg("--no-display-prompt")
+        .arg("--no-show-timings")
+        .arg("--no-warmup")
+        .arg("--log-disable")
+        .arg("--color")
+        .arg("off")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let result = command.output();
+    let _ = fs::remove_file(&prompt_path);
+    let output = result.context("Unable to launch the optional llama.cpp runtime")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow!(
-            "The scan report is too large for the local assistant context"
+            "The local Storage Assistant runtime failed: {}",
+            compact_process_error(&stderr)
         ));
     }
 
-    let mut batch = LlamaBatch::new(prompt_tokens.len().max(512), 1);
-    let last_index = i32::try_from(prompt_tokens.len().saturating_sub(1))?;
-    for (index, token) in (0_i32..).zip(prompt_tokens.into_iter()) {
-        batch.add(token, index, &[0], index == last_index)?;
-    }
-    context
-        .decode(&mut batch)
-        .context("The local model could not process the scan report")?;
-
-    let mut sampler = LlamaSampler::greedy();
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let mut output = String::new();
-    let mut current = batch.n_tokens();
-    let end = current.saturating_add(max_output_tokens.max(1));
-
-    while current < end {
-        let token = sampler.sample(&context, batch.n_tokens() - 1);
-        sampler.accept(token);
-        if model.is_eog_token(token) {
-            break;
-        }
-
-        output.push_str(
-            &model
-                .token_to_piece(token, &mut decoder, true, None)
-                .context("Unable to decode local model output")?,
-        );
-        batch.clear();
-        batch.add(token, current, &[0], true)?;
-        current = current.saturating_add(1);
-        context
-            .decode(&mut batch)
-            .context("Local model generation failed")?;
-    }
-
-    if output.trim().is_empty() {
+    let generated = String::from_utf8(output.stdout)
+        .context("The local Storage Assistant returned invalid UTF-8 output")?;
+    if generated.trim().is_empty() {
         return Err(anyhow!("The Storage Assistant returned an empty report"));
     }
-    Ok(output)
+    Ok(generated)
+}
+
+fn compact_process_error(stderr: &str) -> String {
+    let compact = stderr.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.is_empty() {
+        "no diagnostic output was provided".to_string()
+    } else {
+        compact.chars().take(600).collect()
+    }
 }
 
 pub fn parse_report(report: &ScanReport, output: &str) -> Result<StorageAssistantReport> {
@@ -276,6 +278,12 @@ mod tests {
         assert!(!contains_cleanup_claim(
             "This appears to be application state."
         ));
+    }
+
+    #[test]
+    fn process_errors_are_bounded() {
+        let message = compact_process_error(&"failure ".repeat(500));
+        assert!(message.len() <= 600);
     }
 
     #[test]

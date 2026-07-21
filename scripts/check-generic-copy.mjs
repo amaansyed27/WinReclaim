@@ -165,17 +165,50 @@ for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilt
 }
 
 const assistantBackend = readFileSync("src-tauri/src/assistant/mod.rs", "utf8");
-for (const required of ["Qwen3.5-2B", "Q4_K_M", "MODEL_SHA256", "pub fn analyze"]) {
+for (const required of [
+  "Qwen3.5-2B",
+  "Q4_K_M",
+  "MODEL_SHA256",
+  "RUNTIME_TAG",
+  "RUNTIME_RELEASE_API",
+  "runtime_path",
+  "pub fn analyze"
+]) {
   if (!assistantBackend.includes(required)) {
     violations.push(`src-tauri/src/assistant/mod.rs: missing local assistant contract "${required}"`);
   }
 }
 
+const assistantDownload = readFileSync("src-tauri/src/assistant/download.rs", "utf8");
+for (const required of ["GithubRelease", "runtime_sha256", "ZipArchive", "enclosed_name", "download_verified"]) {
+  if (!assistantDownload.includes(required)) {
+    violations.push(`src-tauri/src/assistant/download.rs: missing sidecar verification "${required}"`);
+  }
+}
+
 const assistantInference = readFileSync("src-tauri/src/assistant/inference.rs", "utf8");
-for (const required of ["advisory_only: true", "contains_cleanup_claim", "finding_ids.contains", "MAX_ANNOTATIONS"]) {
+for (const required of [
+  "Command::new",
+  "--single-turn",
+  "advisory_only: true",
+  "contains_cleanup_claim",
+  "finding_ids.contains",
+  "MAX_ANNOTATIONS"
+]) {
   if (!assistantInference.includes(required)) {
     violations.push(`src-tauri/src/assistant/inference.rs: missing output safeguard "${required}"`);
   }
+}
+if (assistantInference.includes("llama_cpp_2")) {
+  violations.push("src-tauri/src/assistant/inference.rs: embedded llama.cpp bindings were reintroduced");
+}
+
+const cargoManifest = readFileSync("src-tauri/Cargo.toml", "utf8");
+if (cargoManifest.includes("llama-cpp-2")) {
+  violations.push("src-tauri/Cargo.toml: embedded llama.cpp dependency was reintroduced");
+}
+if (!cargoManifest.includes('zip = { version = "2"')) {
+  violations.push("src-tauri/Cargo.toml: pure-Rust sidecar archive extraction dependency is missing");
 }
 
 const assistantPrompt = readFileSync("src-tauri/src/assistant/prompt.rs", "utf8");

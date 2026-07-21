@@ -51,11 +51,11 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
   async function install() {
     setWorking(true);
     setMessage(null);
-    setProgress({ phase: "connecting", downloadedBytes: 0, totalBytes: status?.expectedBytes ?? 0 });
+    setProgress({ phase: "runtime-connecting", downloadedBytes: 0, totalBytes: 0 });
     try {
       const next = await installStorageAssistant();
       setStatus(next);
-      setMessage("Storage Assistant installed and verified.");
+      setMessage("Storage Assistant model and runtime installed and verified.");
     } catch (error) {
       setMessage(String(error));
       await refresh();
@@ -65,14 +65,14 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
   }
 
   async function uninstall() {
-    if (!window.confirm("Remove the downloaded Storage Assistant model? Scan history and cleanup records are not affected.")) return;
+    if (!window.confirm("Remove the downloaded Storage Assistant model and llama.cpp runtime? Scan history and cleanup records are not affected.")) return;
     setWorking(true);
     setMessage(null);
     try {
       const next = await uninstallStorageAssistant();
       setStatus(next);
       setProgress(null);
-      setMessage("Storage Assistant model removed.");
+      setMessage("Storage Assistant model and runtime removed.");
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -101,11 +101,11 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
       <div className="assistant-model-card">
         <div>
           <strong>{status?.model ?? "Qwen3.5-2B Q4_K_M"}</strong>
-          <span>{status?.runtime ?? "Local CPU inference"}</span>
+          <span>{status?.runtime ?? "Optional llama.cpp CPU sidecar"}</span>
         </div>
         <div>
           <strong>{modelSize ? formatBytes(modelSize) : "About 1.4 GB"}</strong>
-          <span>{status?.license ?? "Apache-2.0"}</span>
+          <span>{status?.license ?? "Apache-2.0 model · MIT runtime"}</span>
         </div>
       </div>
 
@@ -134,12 +134,12 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
 
       <p className="assistant-privacy-note">
         {status?.privacyNote ??
-          "The model receives only the completed scan report and runs entirely on this PC."}
+          "The model and its small prebuilt runtime are downloaded only when enabled. Neither component is bundled into the base WinReclaim installer."}
       </p>
 
       {status?.modelPath && installed && (
         <div className="settings-data-path">
-          <span>Model location</span>
+          <span>Assistant location</span>
           <code>{status.modelPath}</code>
         </div>
       )}
@@ -160,7 +160,7 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
             disabled={disabled || working}
             onClick={() => void uninstall()}
           >
-            {working ? "Removing…" : "Remove model"}
+            {working ? "Removing…" : "Remove assistant"}
           </button>
         ) : (
           <button
@@ -181,12 +181,20 @@ export function StorageAssistantSettings({ disabled }: StorageAssistantSettingsP
 
 function downloadLabel(phase: string): string {
   switch (phase) {
+    case "runtime-connecting":
+      return "Checking pinned llama.cpp runtime";
+    case "runtime-downloading":
+      return "Downloading llama.cpp runtime";
+    case "runtime-verifying":
+      return "Verifying runtime SHA-256";
+    case "runtime-extracting":
+      return "Installing local runtime";
     case "connecting":
       return "Connecting to model host";
     case "downloading":
       return "Downloading model";
     case "verifying":
-      return "Verifying SHA-256";
+      return "Verifying model SHA-256";
     case "ready":
       return "Ready";
     default:
