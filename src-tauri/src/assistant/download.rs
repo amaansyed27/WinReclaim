@@ -11,7 +11,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use zip::ZipArchive;
@@ -275,7 +275,6 @@ fn extract_runtime(archive_path: &Path, destination: &Path) -> Result<()> {
             .context("Unable to read the llama.cpp runtime archive")?;
         let relative = entry
             .enclosed_name()
-            .map(PathBuf::from)
             .ok_or_else(|| anyhow!("The llama.cpp runtime archive contained an unsafe path"))?;
         let output = destination.join(relative);
         if entry.is_dir() {
