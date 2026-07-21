@@ -11,7 +11,8 @@ const genericUiFiles = [
   "src/features/receipt/ReceiptView.tsx",
   "src/features/settings/SettingsView.tsx",
   "src/features/timeline/TimelineView.tsx",
-  "src/features/vault/VaultView.tsx"
+  "src/features/vault/VaultView.tsx",
+  "src/lib/storageGroups.ts"
 ];
 
 const forbiddenMachineExamples = [
@@ -58,14 +59,34 @@ for (const action of ["prefetch", "generic_directory"]) {
     violations.push(`src/types.ts: missing action kind "${action}"`);
   }
 }
+for (const required of ["DriveInfo", "DriveKind", "roots: string[]", "drives: DriveInfo[]"]) {
+  if (!frontendTypes.includes(required)) {
+    violations.push(`src/types.ts: missing multi-drive type "${required}"`);
+  }
+}
 
 const profileBackend = readFileSync("src-tauri/src/scanner/profile.rs", "utf8");
 if (profileBackend.includes("eligible_temp_size") || profileBackend.includes("temp_minimum_age")) {
   violations.push("src-tauri/src/scanner/profile.rs: Temp is still age-filtered instead of measuring the full root");
 }
-for (const required of ["ActionKind::Prefetch", "ActionKind::GenericDirectory", "project_output_descriptor"]) {
+for (const required of [
+  "ActionKind::Prefetch",
+  "ActionKind::GenericDirectory",
+  "project_output_descriptor",
+  "resolve_roots",
+  "selected_drive_info",
+  "aggregate_disk",
+  "apply_drive_safety"
+]) {
   if (!profileBackend.includes(required)) {
-    violations.push(`src-tauri/src/scanner/profile.rs: missing cleanup safeguard "${required}"`);
+    violations.push(`src-tauri/src/scanner/profile.rs: missing scan safeguard "${required}"`);
+  }
+}
+
+const platformBackend = readFileSync("src-tauri/src/platform/windows/filesystem.rs", "utf8");
+for (const required of ["list_drives", "GetLogicalDrives", "GetVolumeInformationW", "volume_id", "same_drive"]) {
+  if (!platformBackend.includes(required)) {
+    violations.push(`src-tauri/src/platform/windows/filesystem.rs: missing volume discovery "${required}"`);
   }
 }
 
@@ -93,6 +114,13 @@ for (const required of ["scope_fingerprint", "compared_with_at", "total_growth_b
   }
 }
 
+const policyBackend = readFileSync("src-tauri/src/policy.rs", "utf8");
+for (const required of ["volume_id", "file_system", "total_bytes", "normalized_roots.sort", "volumes.sort"]) {
+  if (!policyBackend.includes(required)) {
+    violations.push(`src-tauri/src/policy.rs: scan scope is not keyed by stable volume identity "${required}"`);
+  }
+}
+
 const appDataBackend = readFileSync("src-tauri/src/app_data.rs", "utf8");
 for (const required of ["DATA_GENERATION", "clear_scan_history", "clear_cleanup_records", "include_restore_files"]) {
   if (!appDataBackend.includes(required)) {
@@ -104,9 +132,30 @@ if (!appDataBackend.includes("if !request.include_restore_files")) {
 }
 
 const commandBackend = readFileSync("src-tauri/src/commands/mod.rs", "utf8");
-for (const required of ["get_app_data_summary", "clear_scan_history", "clear_cleanup_records", "reset_app_data"]) {
+for (const required of [
+  "get_app_data_summary",
+  "clear_scan_history",
+  "clear_cleanup_records",
+  "reset_app_data",
+  "list_storage_drives",
+  "combined_free_bytes"
+]) {
   if (!commandBackend.includes(required)) {
-    violations.push(`src-tauri/src/commands/mod.rs: missing settings command "${required}"`);
+    violations.push(`src-tauri/src/commands/mod.rs: missing command "${required}"`);
+  }
+}
+
+const scanView = readFileSync("src/features/scan/ScanView.tsx", "utf8");
+for (const required of ["listStorageDrives", "selectedRoots", "DrivePicker", "Inspection only"]) {
+  if (!scanView.includes(required)) {
+    violations.push(`src/features/scan/ScanView.tsx: missing drive-selection behavior "${required}"`);
+  }
+}
+
+const findingsView = readFileSync("src/features/findings/FindingsView.tsx", "utf8");
+for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilter", "storageGroups"]) {
+  if (!findingsView.includes(required)) {
+    violations.push(`src/features/findings/FindingsView.tsx: missing deterministic grouping "${required}"`);
   }
 }
 
