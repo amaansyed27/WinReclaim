@@ -15,21 +15,14 @@ If `LOCALAPPDATA` is unavailable in an unusual development environment, the back
 ├─ data-generation
 ├─ snapshots\
 ├─ receipts\
-├─ vault\
-└─ models\
-   └─ storage-assistant\
-      ├─ manifest.json
-      ├─ Qwen3.5-2B-Q4_K_M.gguf
-      └─ runtime\
-         └─ <pinned-runtime-tag>\
-            └─ llama-cli.exe
+└─ vault\
 ```
 
-Additional temporary files may appear during an atomic write, download or archive extraction. Failed installations should clean incomplete artifacts before reporting the assistant as verified.
+Temporary files may appear during atomic writes or cleanup operations. The current cloud assistant does not store model weights, runtimes, prompts, provider keys or cloud responses under this directory.
 
 ## `data-generation`
 
-The backend writes an internal generation identifier to distinguish compatible owned-data layouts. When the generation changes, incompatible snapshots and receipts may be removed during initialization. Vault and model data have separate retention rules because deleting either can remove recovery capability or force a large download.
+The backend writes an internal generation identifier to distinguish compatible owned-data layouts. When the generation changes, incompatible snapshots and receipts may be removed during initialization. Vault data has separate retention rules because deleting it can remove recovery capability.
 
 Changing the generation identifier is a migration decision, not a formatting change. Document why old data cannot be read before changing it.
 
@@ -43,17 +36,9 @@ Location:
 
 A completed scan creates a versioned JSON snapshot used by Storage Time Machine.
 
-Snapshots contain derived metadata such as:
-
-- scan configuration and selected roots;
-- finding identifiers and classifications;
-- sizes measured during the scan;
-- timestamps and rule-set/schema versions;
-- data needed for compatible comparisons.
+Snapshots contain derived metadata such as scan configuration, selected roots, finding identifiers, classifications, measured sizes, timestamps and schema/rule-set versions.
 
 Snapshots are local and are not uploaded. The current retention policy keeps a bounded history rather than growing indefinitely.
-
-A snapshot from an incompatible schema or scan configuration may remain visible but cannot be used as a delta baseline.
 
 ## Receipts
 
@@ -63,14 +48,7 @@ Location:
 %LOCALAPPDATA%\WinReclaim\receipts
 ```
 
-A receipt records the outcome of an executed cleanup plan, including:
-
-- plan identity;
-- actions attempted;
-- skipped or failed work;
-- estimated reclaim associated with the plan;
-- measured free-space change;
-- timestamps and consequences.
+A receipt records the outcome of an executed cleanup plan, including plan identity, actions attempted, skipped or failed work, plan estimates, measured free-space change, timestamps and consequences.
 
 Receipts do not contain executable authority. Replaying a receipt must never execute cleanup.
 
@@ -104,19 +82,34 @@ Restore rules:
 
 Moving a file on the same drive does not by itself reclaim disk space. WinReclaim applies NTFS compression where supported and reports measured net disk-space change.
 
-## Optional Storage Assistant
+## Retired local Storage Assistant
 
-Location:
+Version 1.2.0 could create:
 
 ```text
 %LOCALAPPDATA%\WinReclaim\models\storage-assistant
 ```
 
-The directory contains the user-initiated optional model download, verified `llama.cpp` CPU sidecar and a manifest describing their expected provenance.
+That directory contained a Qwen GGUF file, a `llama.cpp` runtime, a manifest and temporary request files. Version 1.2.1 no longer uses any of those components and removes this owned directory during startup.
 
-The model directory is preserved by normal application reset so users do not have to repeat a large download. It can be removed independently from Settings.
+Manual removal after closing WinReclaim is safe:
 
-Do not place the updater private key, OpenAI API key or user scan exports in this directory.
+```powershell
+Remove-Item -LiteralPath "$env:LOCALAPPDATA\WinReclaim\models\storage-assistant" -Recurse -Force -ErrorAction SilentlyContinue
+
+$models = "$env:LOCALAPPDATA\WinReclaim\models"
+if ((Test-Path $models) -and -not (Get-ChildItem -LiteralPath $models -Force | Select-Object -First 1)) {
+    Remove-Item -LiteralPath $models -Force
+}
+```
+
+This does not remove snapshots, receipts or Undo Vault payloads.
+
+## Cloud assistant state
+
+The desktop application persists no OpenRouter credential. `OPENROUTER_API_KEY` exists only in the Vercel environment for the WinReclaim proxy.
+
+Assistant requests are generated on demand and are not written to a local prompt directory. Returned summaries are held in current UI state and are not added to scan snapshots, receipts or the vault.
 
 ## Reset operations
 
@@ -124,11 +117,10 @@ WinReclaim exposes separate operations because the consequences differ:
 
 | Operation | Removes | Preserves |
 | --- | --- | --- |
-| Clear scan history | Snapshot JSON | Receipts, vault, models |
-| Clear cleanup records | Receipt JSON | Snapshots, vault, models |
-| Reset app data | Most owned non-model state | Models and, by default, vault |
-| Reset including restore files | Most owned state including vault | Models |
-| Uninstall Storage Assistant | Assistant model/runtime directory | Scans, receipts, vault |
+| Clear scan history | Snapshot JSON | Receipts and vault |
+| Clear cleanup records | Receipt JSON | Snapshots and vault |
+| Reset app data | Most owned state | Vault by default |
+| Reset including restore files | Most owned state including vault | Nothing in the app-data root except the generation marker |
 
 The user must explicitly choose to include restore files in reset. UI wording must not imply that clearing records restores data.
 
@@ -139,22 +131,16 @@ Developers may remove the application-data directory for disposable testing, but
 1. close all WinReclaim processes;
 2. confirm no needed vault entries remain;
 3. back up any test fixture required for debugging;
-4. avoid deleting the directory during cleanup or model download.
+4. avoid deleting the directory during cleanup.
 
-For normal users, prefer the Settings controls because they expose the correct consequences.
+For normal users, prefer Settings controls because they expose the correct consequences.
 
 ## Backups and migration
 
-WinReclaim does not currently provide cloud synchronization. Users who back up the directory should treat it as sensitive because folder labels and storage metadata can reveal installed tools or project context.
+WinReclaim does not provide cloud synchronization. Users who back up the directory should treat it as sensitive because folder labels and storage metadata can reveal installed tools or project context.
 
-A migration that changes snapshot, receipt or vault schemas should include:
-
-- explicit schema versioning;
-- compatibility tests;
-- safe refusal for unknown formats;
-- an upgrade or retention policy;
-- documentation and changelog updates.
+A migration that changes snapshot, receipt or vault schemas should include explicit schema versioning, compatibility tests, safe refusal for unknown formats, an upgrade or retention policy and documentation/changelog updates.
 
 ## Privacy
 
-Application-owned data remains local unless the user manually shares it. See [privacy.md](privacy.md) for intended network activity and redaction guidance.
+Application-owned persisted data remains local unless the user manually shares it. Optional assistant requests send only the bounded fields documented in [privacy.md](privacy.md).
