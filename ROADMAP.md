@@ -1,8 +1,8 @@
 # Roadmap
 
-This roadmap describes direction, not guaranteed delivery dates. Safety and release quality take priority over feature count.
+This roadmap describes direction, not guaranteed dates. Safety and release quality take priority over feature count.
 
-## Current product foundation
+## Current foundation
 
 WinReclaim currently focuses on:
 
@@ -14,104 +14,90 @@ WinReclaim currently focuses on:
 - allowlisted cleanup adapters;
 - compressed Undo Vault and measured receipts;
 - signed Windows releases;
-- optional advisory-only remote and local intelligence.
+- optional advisory cloud assistance through a privacy-bounded Vercel/OpenRouter proxy.
 
 ## Near-term priorities
 
 ### Release reliability
 
-- harden the consolidated Windows release workflow;
-- validate clean NSIS and MSI installation paths;
-- test signed in-app updates across consecutive versions;
-- improve release artifact and manifest verification;
-- document reproducible release inputs where practical.
+- validate clean NSIS/MSI installation and uninstall;
+- test signed updates across consecutive versions;
+- improve artifact/manifest verification;
+- add stronger release provenance where practical.
 
 ### Scanner accuracy and performance
 
 - improve error and skip visibility;
 - reduce repeated sizing work;
-- improve selected-drive progress reporting;
-- expand deterministic tool-specific evidence;
-- benchmark Deep and Ultra profiles on large developer machines.
+- improve multi-drive progress;
+- expand deterministic ownership evidence;
+- benchmark Deep and Ultra profiles.
 
 ### Safety and recovery
 
 - expand refusal-path tests;
 - improve vault expiry and partial-restore reporting;
 - strengthen time-of-check/time-of-use resistance;
-- add clearer per-action recovery guidance;
-- continue auditing protected-root precedence.
+- improve per-action recovery guidance;
+- continue auditing protected precedence.
 
-### User experience
+### User experience and accessibility
 
 - improve explanations for inspection-only findings;
-- make scan compatibility and timeline baselines clearer;
+- clarify timeline compatibility/baselines;
 - improve keyboard and screen-reader navigation;
-- refine installer/update failure messages;
-- keep advanced controls available without overwhelming normal users.
+- refine installer, updater and cloud-failure messages;
+- preserve readable normal-user flows alongside advanced controls.
 
-### Storage Assistant
+### Cloud assistant
 
-- maintain pinned model/runtime provenance;
-- build the fixed anonymized evaluation suite;
-- measure CPU and memory performance on lower-end systems;
-- consider a WinReclaim-specific adapter only after passing the evaluation gate;
-- preserve advisory-only authority.
+- complete the fixed synthetic privacy/evaluation suite;
+- verify that new payloads never include paths or names;
+- strengthen durable abuse/rate controls beyond best-effort in-memory throttling;
+- measure OpenRouter free-router availability and latency;
+- provide transparent routed-model disclosure;
+- keep deterministic core operation fully usable offline;
+- preserve advisory-only authority and server-side credential separation.
+
+Current releases will not reintroduce a bundled local model unless a future proposal demonstrates a clear product benefit, acceptable installer/runtime cost and equivalent security/release quality.
 
 ## Medium-term exploration
 
 ### Faster scanner backends
 
-Potential backends include:
-
-- NTFS Master File Table enumeration for initial inventory;
-- USN Change Journal indexing for incremental refresh;
-- tool-native metadata for exact size and last-use context.
-
-Any new backend must preserve the existing rule, policy, planner and execution boundaries.
+Potential work includes NTFS MFT enumeration, USN Change Journal indexing and tool-native metadata. New backends must retain existing rules, policy, planner and execution boundaries.
 
 ### Expanded deterministic coverage
 
-Possible additions:
-
-- more package-manager caches;
-- more build systems;
-- additional verified browser/runtime caches;
-- more Windows diagnostics and servicing locations;
-- clearer application ownership attribution.
-
-New detections can remain inspection-only until a safe adapter exists.
+Possible additions include more package-manager/build caches, verified browser/runtime caches, Windows diagnostics/servicing locations and stronger application ownership attribution. New detections can remain inspection-only until a safe adapter exists.
 
 ### Distribution and trust
 
-Possible work:
-
 - Windows Authenticode signing when sustainable;
-- stronger release provenance/attestations;
-- improved update rollback guidance;
+- stronger attestations and reproducibility;
+- clearer rollback guidance;
 - package-manager distribution after installer stability is proven.
 
 ## Explicit non-goals
 
-The project does not plan to become:
+WinReclaim is not intended to become:
 
-- a registry cleaner;
-- a Windows debloater;
+- a registry cleaner or Windows debloater;
 - a generic performance booster;
 - an arbitrary-path deletion tool;
 - a background telemetry agent;
 - an AI agent with deletion authority;
 - a secure-erasure product;
-- a replacement for tool-native project or environment managers.
+- a replacement for tool-native project/environment managers.
 
-## How roadmap decisions are made
+## Decision criteria
 
 Proposals are evaluated against:
 
-1. risk of unintended data loss;
+1. unintended-data-loss risk;
 2. deterministic evidence quality;
 3. recovery consequence;
-4. privacy/network impact;
+4. privacy, credential and network impact;
 5. maintainability and testability;
 6. value to Windows users;
 7. release and support cost.
