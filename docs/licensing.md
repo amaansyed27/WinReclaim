@@ -2,30 +2,21 @@
 
 ## WinReclaim source and documentation
 
-WinReclaim is distributed under the [MIT License](../LICENSE).
+WinReclaim is distributed under the [MIT License](../LICENSE). It permits use, copying, modification, publication and distribution provided the copyright and licence notice are preserved.
 
-The licence permits use, copying, modification, merging, publication, distribution, sublicensing and sale of copies, provided the copyright and licence notice are preserved.
-
-The software is provided without warranty. A cleanup tool can have significant consequences; distributors and users are responsible for validating their builds and deployment environment.
+The software is provided without warranty. Cleanup software can have significant consequences; distributors and users are responsible for validating their builds and environment.
 
 ## Contributions
 
-Unless a contribution states otherwise before acceptance, submitted code and documentation are licensed under the repository's MIT License. Contributors must have the right to provide the material.
+Unless stated otherwise before acceptance, contributions are licensed under the repository's MIT License. Contributors must have the right to submit the material.
 
-Do not submit:
-
-- copied proprietary code;
-- model weights without distribution permission;
-- reverse-engineered assets with unclear rights;
-- third-party logos or screenshots presented as project-owned artwork;
-- generated content that reproduces restricted source material;
-- dependencies with terms incompatible with the intended distribution.
+Do not submit proprietary code, unlicensed model weights/assets, third-party branding presented as project-owned, restricted generated material or dependencies/services incompatible with distribution.
 
 No contributor licence agreement is currently required.
 
-## Dependency licences
+## Dependencies
 
-JavaScript and Rust dependencies retain their upstream licences. The lockfiles record the resolved dependency graph:
+JavaScript and Rust dependencies retain their upstream licences. Locked inventories:
 
 ```text
 package-lock.json
@@ -34,55 +25,56 @@ src-tauri/Cargo.lock
 
 Before adding a dependency:
 
-1. identify the exact upstream project;
-2. review its licence and notice requirements;
-3. check transitive dependencies when relevant;
-4. prefer source dependencies over opaque binaries;
-5. document user-visible or runtime-downloaded components;
+1. identify the exact upstream project and version;
+2. review licence and notice requirements;
+3. inspect relevant transitive dependencies;
+4. prefer auditable source dependencies;
+5. document bundled or user-visible components;
 6. update [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
-## Optional model and runtime
+## Optional cloud services
 
-The optional Storage Assistant downloads components that are not relicensed by WinReclaim:
+Current WinReclaim releases do not bundle or download model weights or a local inference runtime.
 
-- Qwen3.5-2B GGUF model — documented as Apache-2.0 by the pinned source;
-- `llama.cpp` Windows CPU runtime — MIT.
+Optional Storage Assistant and reclaim-by-intent requests use:
 
-The source, revision/tag, filenames and verification details are listed in [model-sources.md](model-sources.md).
+- **Vercel** for the landing page and server-side proxy;
+- **OpenRouter** and its `openrouter/free` router;
+- a model/provider selected by OpenRouter for each available free request.
 
-Anyone redistributing a bundle that includes these optional artifacts must comply with their licences and include required notices. The standard WinReclaim installer does not need to embed them because they are downloaded only after user confirmation.
+These services and routed outputs are governed by their respective terms and policies, not by WinReclaim's MIT License. The OpenRouter credential is held only as a Vercel environment secret; no provider key or SDK is distributed in the application.
 
-## OpenAI service and trademarks
+Version 1.2.0 could download Qwen/`llama.cpp` artifacts. Version 1.2.1 removes that retired integration and its owned local directory. Those artifacts are not part of current distribution.
 
-The optional reclaim-by-intent feature calls an external OpenAI service using a user-provided API key. The service and model are governed by the user's agreement with OpenAI; they are not licensed under WinReclaim's MIT License.
+## Build Week and trademarks
 
-OpenAI, GPT and related marks belong to their respective owners. “Built for OpenAI Build Week — July Edition with GPT-5.6 Sol” describes the project's development context and does not imply sponsorship, certification, endorsement or affiliation.
+“Built for OpenAI Build Week — July Edition with GPT-5.6 Sol” describes the project's development context. GPT-5.6 Sol and Codex assisted development; the current application does not call the OpenAI API.
+
+OpenAI, GPT, Codex, OpenRouter, Vercel, Windows, GitHub and routed provider/model names are marks of their respective owners. Their mention does not imply sponsorship, certification, endorsement or affiliation.
 
 ## WinReclaim name and branding
 
-The MIT License covers repository code and project-created assets, but it does not automatically grant trademark rights. Forks should avoid presenting themselves as official WinReclaim releases when they change safety policy, updater keys or cleanup behaviour.
+MIT covers repository code and project-created assets but does not automatically grant trademark rights. Forks should not present modified safety policy, updater keys or cleanup behaviour as an official WinReclaim release.
 
 Recommended fork practice:
 
 - use a distinct application identifier;
 - use a distinct updater endpoint and signing key;
+- use separate cloud credentials/endpoints;
 - state that the build is unofficial;
-- avoid uploading artifacts to official WinReclaim release channels;
-- document changes to safety and privacy behaviour.
+- document safety, privacy and network changes.
 
 ## Binary distribution checklist
 
 A distributor should:
 
 - include the MIT licence;
-- preserve required third-party notices;
-- review locked dependency licences;
-- use its own protected updater signing key for a fork;
-- verify the installer and update metadata;
-- avoid bundling optional artifacts without complying with their terms;
-- document any telemetry, network or policy changes;
-- avoid implying OpenAI or upstream endorsement.
+- preserve required notices;
+- review locked dependencies;
+- use its own protected signing key for a fork;
+- verify installer and updater metadata;
+- keep provider credentials out of distributed clients;
+- document cloud services, telemetry and transmitted fields;
+- avoid implying upstream endorsement.
 
-## Questions
-
-Licensing questions can be raised through a GitHub issue when they do not contain confidential information. This document is general project guidance, not legal advice.
+See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). This document is general project guidance, not legal advice.
