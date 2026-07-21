@@ -1,20 +1,45 @@
-use crate::domain::{ActionKind, Finding, RecoveryClass, RiskClass, ScanRequest};
+use crate::domain::{ActionKind, DriveInfo, Finding, RecoveryClass, RiskClass, ScanRequest};
 use crate::rules::RULE_SET_VERSION;
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub const VAULT_RETENTION_DAYS: i64 = 7;
 pub const SNAPSHOT_LIMIT: usize = 40;
-pub const SNAPSHOT_SCHEMA_VERSION: u32 = 2;
+pub const SNAPSHOT_SCHEMA_VERSION: u32 = 3;
 
-pub fn scan_scope_fingerprint(root: &Path, request: &ScanRequest) -> String {
-    let normalized_root = root
-        .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(root))
-        .to_string_lossy()
-        .to_ascii_lowercase();
+pub fn scan_scope_fingerprint(
+    roots: &[PathBuf],
+    drives: &[DriveInfo],
+    request: &ScanRequest,
+) -> String {
+    let mut normalized_roots = roots
+        .iter()
+        .map(|root| {
+            root.canonicalize()
+                .unwrap_or_else(|_| PathBuf::from(root))
+                .to_string_lossy()
+                .to_ascii_lowercase()
+        })
+        .collect::<Vec<_>>();
+    normalized_roots.sort();
+
+    let mut volumes = drives
+        .iter()
+        .map(|drive| {
+            format!(
+                "{}:{}:{}",
+                drive.volume_id.to_ascii_lowercase(),
+                drive.file_system.to_ascii_lowercase(),
+                drive.total_bytes
+            )
+        })
+        .collect::<Vec<_>>();
+    volumes.sort();
+
     let signature = format!(
-        "{normalized_root}|{:?}|{}|{}|{}|{}|{}|{}|{}|{RULE_SET_VERSION}",
+        "{}|{}|{:?}|{}|{}|{}|{}|{}|{}|{}|{RULE_SET_VERSION}",
+        normalized_roots.join(","),
+        volumes.join(","),
         request.mode,
         request.include_known_targets,
         request.include_project_outputs,

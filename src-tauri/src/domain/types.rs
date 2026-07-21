@@ -44,6 +44,32 @@ pub enum RecoveryClass {
     Protected,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DriveKind {
+    #[default]
+    Fixed,
+    Removable,
+    Network,
+    Optical,
+    RamDisk,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriveInfo {
+    pub root: String,
+    pub label: String,
+    pub file_system: String,
+    pub volume_id: String,
+    pub total_bytes: u64,
+    pub free_bytes: u64,
+    pub used_bytes: u64,
+    pub is_system: bool,
+    pub kind: DriveKind,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiskSnapshot {
@@ -89,6 +115,8 @@ pub struct ScanReport {
     pub started_at: DateTime<Utc>,
     pub completed_at: DateTime<Utc>,
     pub root: String,
+    #[serde(default)]
+    pub drives: Vec<DriveInfo>,
     pub scope_fingerprint: String,
     pub disk: DiskSnapshot,
     pub findings: Vec<Finding>,
@@ -112,6 +140,8 @@ pub struct ScanRequest {
     #[serde(default)]
     pub root: Option<String>,
     #[serde(default)]
+    pub roots: Vec<String>,
+    #[serde(default)]
     pub mode: ScanMode,
     #[serde(default = "default_true")]
     pub include_known_targets: bool,
@@ -133,6 +163,7 @@ impl Default for ScanRequest {
     fn default() -> Self {
         Self {
             root: None,
+            roots: Vec::new(),
             mode: ScanMode::Balanced,
             include_known_targets: true,
             include_project_outputs: false,

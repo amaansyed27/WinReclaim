@@ -5,6 +5,7 @@ import type {
   AiStatus,
   CleanupPlan,
   CleanupReceipt,
+  DriveInfo,
   IntentSuggestion,
   ReclaimPassport,
   RestoreResult,
@@ -21,6 +22,10 @@ export async function startScan(options: ScanOptions): Promise<ScanReport> {
 
 export async function cancelScan(): Promise<void> {
   return invoke("cancel_scan");
+}
+
+export async function listStorageDrives(): Promise<DriveInfo[]> {
+  return invoke<DriveInfo[]>("list_storage_drives");
 }
 
 export async function getAiStatus(): Promise<AiStatus> {
