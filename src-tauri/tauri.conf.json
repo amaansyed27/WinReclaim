@@ -48,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg5OUM3Njc5RUZDMDc3RjYKUldUMmQ4RHZlWGFjaVcvVllkT1FPZ2oxLzRjREhxaVNIWUUxaXNFazVNNlpSV2dJL0QwVldJd2YK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxOTdFN0VDQUIyRUJCOTEKUldTUnV5NnI3T2VYa1hINnRjNkRhYll5RUdtZDIzZVE4QUlMdStmS0hONHdEWk9XQ0JjSzk2cHUK",
       "endpoints": [
         "https://github.com/amaansyed27/WinReclaim/releases/latest/download/latest.json"
       ],
