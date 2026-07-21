@@ -1,0 +1,245 @@
+.drive-picker {
+  display: grid;
+  gap: 16px;
+}
+
+.drive-picker-head,
+.storage-overview-head,
+.inspection-category-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.drive-picker-head h2,
+.storage-overview-head h2,
+.inspection-category-head h3 {
+  margin: 3px 0 0;
+}
+
+.drive-picker-head p,
+.storage-overview-head p,
+.inspection-category-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.drive-picker-head > span,
+.drive-picker-state {
+  color: var(--muted-strong);
+  font-size: 10px;
+}
+
+.drive-grid,
+.overview-drive-grid,
+.storage-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.drive-card {
+  position: relative;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(11, 27, 46, 0.52);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.drive-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.drive-card.is-selected {
+  border-color: rgba(91, 177, 244, 0.72);
+  background: rgba(27, 83, 126, 0.28);
+}
+
+.drive-card > input {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  accent-color: #4da8ee;
+}
+
+.drive-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-right: 24px;
+}
+
+.drive-card-title strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.drive-card-title span,
+.drive-card small,
+.overview-drive-grid small,
+.storage-category-grid small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.drive-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted-strong);
+  font-size: 9px;
+}
+
+.drive-usage,
+.overview-drive-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(111, 151, 192, 0.16);
+}
+
+.drive-usage span,
+.overview-drive-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2b7fc4, #6ec7ff);
+}
+
+.storage-overview {
+  display: grid;
+  gap: 14px;
+}
+
+.overview-drive-grid article,
+.storage-category-grid article {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(10, 25, 43, 0.46);
+}
+
+.overview-drive-grid article > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.overview-drive-grid strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.overview-drive-grid article > div:first-child span,
+.storage-category-grid > article > span {
+  color: var(--muted-strong);
+  font-size: 9px;
+}
+
+.overview-drive-grid b,
+.storage-category-grid strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.drive-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.drive-filter > span {
+  color: var(--muted-strong);
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.drive-filter > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.drive-filter button {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(10, 25, 43, 0.5);
+  color: var(--muted-strong);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.drive-filter button.is-active {
+  border-color: rgba(91, 177, 244, 0.6);
+  background: rgba(35, 105, 159, 0.32);
+  color: var(--text);
+}
+
+.categorized-inspection {
+  display: grid;
+  gap: 14px;
+}
+
+.inspection-category {
+  display: grid;
+  gap: 10px;
+}
+
+.inspection-category + .inspection-category {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.inspection-category-head > div:first-child > span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspection-category-head > div:last-child {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.inspection-category-head > div:last-child strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .drive-picker-head,
+  .storage-overview-head,
+  .inspection-category-head,
+  .drive-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .drive-filter > div {
+    justify-content: flex-start;
+  }
+
+  .inspection-category-head > div:last-child {
+    justify-items: start;
+  }
+}
