@@ -7,6 +7,7 @@ This directory documents the product, developer workflow, safety boundaries and 
 | Document | Audience | Purpose |
 | --- | --- | --- |
 | [Project README](../README.md) | Everyone | Product overview, downloads and quick start |
+| [Installation](installation.md) | Users and testers | Installer choice, first launch, updates and uninstall |
 | [Development guide](development.md) | Contributors | Windows toolchain, local setup and common workflows |
 | [Architecture](architecture.md) | Developers | Module boundaries and end-to-end data flow |
 | [Safety model](safety.md) | Users and developers | Non-negotiable cleanup protections |
@@ -16,8 +17,10 @@ This directory documents the product, developer workflow, safety boundaries and 
 ## Product and behaviour
 
 - [FAQ](faq.md) — common product, privacy and recovery questions.
+- [Installation and updating](installation.md) — official installers, update verification and clean reinstall.
 - [Data layout and lifecycle](data-layout.md) — snapshots, receipts, vault entries, model files and reset behaviour.
 - [Privacy and network access](privacy.md) — local data and every intended outbound connection.
+- [Accessibility](accessibility.md) — keyboard, screen-reader, scaling and safety communication requirements.
 - [Rule system](rules.md) — current detection and classification guarantees.
 - [Rule authoring](rule-authoring.md) — how to add detections without creating unsafe deletion paths.
 - [Storage Assistant](storage-assistant.md) — optional local model design and authority boundary.
@@ -30,6 +33,7 @@ This directory documents the product, developer workflow, safety boundaries and 
 - [Development guide](development.md) — setup, project layout and coding workflow.
 - [Testing](testing.md) — frontend, Rust, installer and manual validation.
 - [Troubleshooting](troubleshooting.md) — build, runtime, installer and updater failures.
+- [Accessibility](accessibility.md) — UI requirements and manual accessibility checks.
 - [Architecture](architecture.md) — component responsibilities and state transitions.
 - [Threat model](threat-model.md) — security assumptions and required controls.
 
