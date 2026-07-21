@@ -11,6 +11,21 @@ All notable user-facing changes to WinReclaim are documented here. The project f
 - Added architecture, command API, data lifecycle, privacy, threat-model, testing, rule-authoring, release, troubleshooting and licensing guidance.
 - Added GitHub issue and pull-request templates.
 
+## [1.2.1] - 2026-07-22
+
+### Fixed
+
+- Storage Assistant now uses the model's native chat template, disables unnecessary reasoning, and constrains generation with a JSON Schema so local summaries return valid structured output reliably.
+- Structured assistant output is read from a dedicated file and parsed with balanced JSON handling instead of depending on unstructured console text.
+- Assistant failures now provide a retry action and collapsible technical details without interrupting the deterministic scan report.
+
+### Changed
+
+- Redesigned the storage review screen with clearer drive metrics, readable storage categories, stronger cleanup hierarchy, and larger finding text.
+- Placed recommended cleanup and optional local analysis in a focused action area instead of stacking oversized full-width panels.
+- Replaced the content-obscuring sticky footer with a normal review action bar.
+- Added explicit local-analysis loading, ready, success, and failure states.
+
 ## [1.2.0] - 2026-07-22
 
 ### Added
