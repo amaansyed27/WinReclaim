@@ -1,0 +1,97 @@
+name: Feature request
+description: Propose a focused product or developer improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WinReclaim prioritizes prevention of unintended data loss over cleanup breadth. Explain the user problem, evidence and safety consequences rather than only proposing a deletion target.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and documentation.
+          required: true
+        - label: This request does not require arbitrary-path deletion or bypassing protected data.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What user problem should be solved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Describe the workflow and visible result.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Area
+      options:
+        - New storage detection
+        - New cleanup adapter
+        - Scan performance
+        - Timeline or insights
+        - Safety or recovery
+        - User interface
+        - Storage Assistant
+        - Optional OpenAI feature
+        - Installer or updater
+        - Developer tooling
+        - Documentation
+        - Landing page
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Deterministic evidence
+      description: For a storage rule, explain how WinReclaim can identify the owner and avoid false positives.
+
+  - type: dropdown
+    id: consequence
+    attributes:
+      label: Expected recovery consequence
+      options:
+        - No filesystem mutation
+        - Reversible through the Undo Vault
+        - Redownloadable
+        - Rebuildable
+        - Review-first or potentially disruptive
+        - Irreversible
+        - Not applicable or unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and privacy considerations
+      description: What could go wrong? Does this add network access, new paths, commands, elevation or persisted data?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include tool-native management options or inspection-only approaches.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

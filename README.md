@@ -1,119 +1,226 @@
 # WinReclaim
 
-**Local-first Windows storage intelligence for developers and AI power users.**
+**Local-first Windows storage intelligence with deterministic cleanup, recovery context and signed updates.**
 
-WinReclaim answers six questions:
+[![CI](https://github.com/amaansyed27/WinReclaim/actions/workflows/ci.yml/badge.svg)](https://github.com/amaansyed27/WinReclaim/actions/workflows/ci.yml)
+[![Windows Release](https://github.com/amaansyed27/WinReclaim/actions/workflows/release-windows.yml/badge.svg)](https://github.com/amaansyed27/WinReclaim/actions/workflows/release-windows.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform: Windows 11 x64](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078D4.svg)](docs/development.md)
+
+> **Built for OpenAI Build Week — July Edition with GPT-5.6 Sol.** WinReclaim is an independent open-source project and is not endorsed by or affiliated with OpenAI.
+
+[Download the latest Windows release](https://github.com/amaansyed27/WinReclaim/releases/latest) · [Read the documentation](docs/README.md) · [Report a bug](https://github.com/amaansyed27/WinReclaim/issues/new?template=bug_report.yml)
+
+---
+
+## What WinReclaim does
+
+WinReclaim answers six practical questions:
 
 1. What is taking my disk space?
 2. What changed since my previous scan?
 3. Which tool or workload most likely owns it?
-4. What can I safely reclaim?
-5. What will removing it cost me later?
-6. Can I reverse the cleanup?
+4. What can be reclaimed under deterministic policy?
+5. What will removal cost to restore, rebuild or redownload?
+6. Can the cleanup be reversed?
 
-It is not a registry cleaner, generic PC optimiser, debloater or AI-controlled deletion agent. The scanner and cleanup decisions are deterministic, inspectable and local.
+It is not a registry cleaner, generic PC optimizer, debloater or AI-controlled deletion agent. Scanning and cleanup authority live in inspectable Rust code. Optional AI features remain advisory.
 
-## Build Week origin
+## Why it exists
 
-WinReclaim started from a real Windows storage investigation. WhatsApp was suspected, but it used only 766 MB. The actual storage pressure came from local AI models, Android emulators, Hugging Face cache, Docker data, Gradle, npm and project build output. A targeted cleanup reclaimed 27.55 GB without touching projects or Ollama models.
+WinReclaim began with a real Windows storage investigation. A commonly suspected application used only a small fraction of the missing space. The larger contributors were local AI models, Android development data, Hugging Face cache, Docker data, Gradle, npm and generated project output.
 
-## Storage intelligence
+A targeted cleanup reclaimed substantial space without deleting projects or Ollama models. WinReclaim turns that investigation into a repeatable product with evidence, consequence labels, confirmation and receipts.
+
+Read the full [Build Week origin](docs/build-week.md).
+
+## Key capabilities
+
+### Multi-drive storage scanning
+
+Select one or more Windows drives and choose a scan profile:
+
+- **Quick** — common temporary locations;
+- **Balanced** — recommended known cleanup targets and Windows caches;
+- **Deep** — project outputs, AppData and bounded unknown discovery;
+- **Ultra** — widest supported coverage with lower size thresholds and larger result limits.
+
+Fixed drives can expose reviewed cleanup actions. Removable and network drives remain inspection-only under the current policy.
 
 ### Storage Time Machine
 
-Every completed scan creates a local snapshot under `%LOCALAPPDATA%\WinReclaim\snapshots`. WinReclaim retains the latest 40 snapshots and compares the newest two to show:
+Every completed scan creates a bounded local snapshot under:
 
-- profile storage growth or reduction
-- the largest classified directory changes
-- likely owning tool or workload
-- attribution confidence
-- recovery class
-- growth already backed by an executable cleanup adapter
+```text
+%LOCALAPPDATA%\WinReclaim\snapshots
+```
 
-The Time Machine page includes a storage-growth graph and a ranked change timeline. The first scan establishes a baseline; the second and later scans produce deltas.
+Compatible later scans can show:
 
-Current attribution is deterministic and evidence-based. It combines WinReclaim rule identity, directory location, category and filesystem modification time. Kernel-level process attribution through ETW and USN Journal monitoring is not part of the current implementation.
+- storage growth or reduction;
+- largest classified changes;
+- likely owning tool or workload;
+- recovery class and consequence;
+- whether a change has a compiled cleanup adapter.
+
+WinReclaim compares scans only when roots, profiles, enabled categories, thresholds, schema and rule-set versions are compatible. The first scan establishes a baseline.
 
 ### Reclaim Passports
 
-Every finding receives a locally generated passport containing:
+Each finding can include a locally generated passport describing:
 
-- likely owner
-- directory-level last-change time
-- recovery class
-- recovery method
-- estimated recovery time
-- confidence score
-- evidence used by the classifier
+- likely owner;
+- evidence used by the rule;
+- last-change context;
+- safety and recovery class;
+- recovery method;
+- consequence;
+- evidence-based confidence.
 
 Unknown dynamic discoveries remain inspection-only even when their names look cache-like.
 
 ### Reclaim Simulation
 
-Before execution, the immutable cleanup plan includes a simulation showing:
+Before execution, WinReclaim creates an immutable hashed plan and shows:
 
-- current and projected free space
-- estimated reclaim
-- reversible, redownloadable, rebuildable and irreversible portions
-- affected action count
-- estimated recovery time
-- protected items touched
+- current and projected free space;
+- estimated reclaim;
+- reversible, redownloadable, rebuildable and irreversible portions;
+- affected action count;
+- protected items touched;
+- consequences for each action.
 
-Projected values remain estimates. The receipt reports the actual free-space change measured by Windows after execution.
+Projected values are estimates. The final receipt reports measured free-space change and per-action results.
 
 ### Safe Undo Vault
 
-Eligible user-temp and crash-dump cleanup is moved into `%LOCALAPPDATA%\WinReclaim\vault` instead of being immediately destroyed.
+Eligible user-temp and recognized crash-dump cleanup is moved into:
 
-- seven-day local retention
-- native NTFS compression through `compact.exe`
-- manifest-backed restore
-- original relative paths preserved
-- existing destination files are never overwritten
-- expired payloads are removed automatically
+```text
+%LOCALAPPDATA%\WinReclaim\vault
+```
 
-Moving data on the same drive does not itself reclaim space, so WinReclaim compresses the vault payload and reports only the measured net disk-space change. npm, Hugging Face and Docker command-based cleanup cannot be fully reversed and are labelled accordingly.
+The vault provides:
 
-## Scanning
+- manifest-backed restore;
+- original relative-path preservation;
+- seven-day retention;
+- native NTFS compression where available;
+- refusal to overwrite existing destination files;
+- explicit expiry and restore status.
 
-### Detection
+Moving files on the same drive does not itself reclaim space, so receipts report measured net disk-space change rather than the original moved size.
 
-- User temporary files eligible by age
-- User-level crash dumps
-- Hugging Face cache
-- npm cache
-- Gradle cache and wrapper distributions
-- Cargo, pip, uv and Bun caches
-- Playwright browser binaries
-- Docker local data
-- Android SDK and AVDs
-- Ollama models
-- Chrome, Edge and Cursor data
-- Large `node_modules`, Rust `target`, Python virtual environments and build folders in common project locations
-- Dynamically discovered large directories that do not match the built-in catalogue
-- Classic Windows cleanup targets: `%TEMP%`, Windows Temp, Prefetch `.pf` files and the Recycle Bin
-- Verified and dynamically discovered cache candidates on the drive containing Windows
+### Signed updates
 
-Scan profiles include Quick, Balanced, Deep and Ultra. A separate Windows-drive cache toggle inspects verified servicing, delivery, diagnostics and installer-cache locations plus bounded unknown cache-named directories. Ultra enables every source, AppData and Windows-drive cache discovery, the 64 MB minimum threshold and maximum result coverage while retaining protected-root and reparse-point exclusions.
+WinReclaim checks the official GitHub Release endpoint and verifies updater artifacts using Tauri's embedded public key. It never accepts an unsigned update.
 
-WinReclaim excludes its own snapshot, receipt and vault data from dynamic findings.
+Updater signing verifies release integrity. It is separate from Windows Authenticode publisher reputation, so an installer can still show an unknown-publisher warning when no Authenticode certificate is present.
 
-## Reclaim by intent
+## What WinReclaim detects
 
-The optional GPT-5.6 feature translates a request such as:
+Current detection includes, when present and enabled by the selected profile:
+
+- user temporary files;
+- user-level crash dumps;
+- Windows Temp;
+- Windows Prefetch `.pf` files;
+- Recycle Bin;
+- Hugging Face cache;
+- npm cache;
+- Gradle caches and wrapper distributions;
+- Cargo, pip, uv and Bun caches;
+- Playwright browser binaries;
+- Docker local data;
+- Android SDK and virtual-device storage;
+- Ollama models;
+- Chrome, Edge and Cursor data;
+- large `node_modules` directories;
+- Rust `target` directories;
+- Python virtual environments;
+- verified build-output folders;
+- bounded large-directory discovery;
+- verified and dynamically discovered Windows-drive cache candidates.
+
+Detection does not imply deletion authority. Project source, models, profiles, volumes and unknown folders remain protected or inspection-only unless a narrow compiled adapter exists.
+
+## Executable cleanup adapters
+
+Examples of current executable behaviour:
+
+| Target | Method | Recovery class |
+| --- | --- | --- |
+| Eligible user temp | Compressed Undo Vault | Reversible during retention |
+| Recognized user crash dumps | Compressed Undo Vault | Reversible during retention |
+| Windows Temp entries | Exact-root entry cleanup | Irreversible; locked/protected entries skipped |
+| Windows Prefetch `.pf` | Exact-root manual action | Rebuildable, review first |
+| Recycle Bin | Native Windows Shell API | Irreversible |
+| Hugging Face cache | Tool-native prune | Redownloadable |
+| npm cache | Tool-native clean | Redownloadable |
+| Conservative Docker data | Tool-native prune | Irreversible; volumes excluded |
+| Verified caches/project outputs | Fingerprint-validated Rust adapter | Rebuildable/redownloadable |
+
+Docker volumes are never included. Android virtual devices and SDK packages are not deleted through raw folder removal. Ollama models and browser profiles are protected.
+
+## Safety model
+
+WinReclaim uses four safety classes:
+
+- **Safe now** — narrowly scoped disposable data;
+- **Rebuild or redownload** — reproducible data with time/bandwidth cost;
+- **Review first** — potentially disruptive environments or generated state;
+- **Protected** — cannot enter an executable cleanup plan.
+
+Non-negotiable controls:
+
+- the frontend sends IDs, not arbitrary deletion paths;
+- Rust resolves and validates all mutation targets;
+- cleanup plans are immutable and hashed;
+- paths and fingerprints are revalidated immediately before execution;
+- reparse points, junctions and symbolic links are rejected;
+- external tools receive fixed explicit argument arrays, not shell strings;
+- protected classification overrides action availability;
+- unknown discoveries remain inspection-only;
+- restore never overwrites an existing destination;
+- receipts distinguish estimates from measured results.
+
+Read [Safety model](docs/safety.md) and [Threat model](docs/threat-model.md).
+
+## Optional intelligence
+
+### Local Storage Assistant
+
+The optional Storage Assistant uses:
+
+- `Qwen/Qwen3.5-2B`;
+- `Q4_K_M` GGUF quantization;
+- a pinned Windows x64 CPU `llama.cpp` sidecar;
+- local, on-demand inference.
+
+The model and runtime are downloaded only after confirmation and verified before use. The normal application build does not compile or embed `llama.cpp` bindings.
+
+The assistant can summarize a completed scan and suggest clearer names for ambiguous findings. It cannot change risk, action availability, selection, plans or execution.
+
+Read [Storage Assistant](docs/storage-assistant.md) and [Pinned sources](docs/model-sources.md).
+
+### Reclaim by intent with GPT-5.6
+
+When a user explicitly provides `OPENAI_API_KEY`, WinReclaim can translate a request such as:
 
 > Free around 20 GB, but do not touch Ollama, browser profiles or Android emulators.
 
 into conservative constraints:
 
-- target reclaim size
-- allowed safety classes
-- explicit exclusions
-- a short explanation
+- target reclaim size;
+- allowed safety classes;
+- explicit exclusions;
+- short explanation.
 
-GPT never receives filesystem paths, usernames, project names or directory trees. It cannot return commands or deletion targets. Rust applies those constraints only to the allowlisted findings from the current scan, and the user must still review the selection before WinReclaim creates a hashed cleanup plan.
+The request is designed not to include filesystem paths, usernames, project names, directory trees or file contents. Rust validates all returned IDs/classes and applies the result only as an editable selection suggestion.
 
-Set the API key in the process environment before starting the app:
+The model cannot return commands, add cleanup targets, create a plan or execute deletion.
+
+Configure for development:
 
 ```powershell
 $env:OPENAI_API_KEY="your-key"
@@ -121,106 +228,75 @@ $env:OPENAI_MODEL="gpt-5.6" # optional override
 npm run tauri dev
 ```
 
-Without an API key, scanning, timeline history, passports, simulation, manual planning, cleanup, undo and receipts remain available offline.
+All core features remain available without an API key.
 
-## Executable adapters
+## Privacy
 
-- User temp files older than seven days → compressed Undo Vault
-- Recognised user-level crash dumps → compressed Undo Vault
-- Windows Temp files older than seven days → exact-root irreversible cleanup
-- Windows Prefetch `.pf` files → manual review-first rebuildable cleanup
-- Windows-drive Recycle Bin → native Windows Shell API, irreversible
-- `hf cache prune --yes` → redownloadable
-- `npm cache clean --force` → redownloadable
-- Conservative `docker system prune --force --filter until=168h` → irreversible
+WinReclaim includes no desktop telemetry.
 
-Docker volumes are never included.
+Local operations:
 
-## Signed updates
+- drive scanning and sizing;
+- rule classification;
+- snapshots and timeline;
+- Reclaim Passports;
+- planning and simulation;
+- cleanup and receipts;
+- Undo Vault and restore;
+- optional Storage Assistant inference.
 
-WinReclaim checks for updates shortly after startup and also provides a manual version button in the top bar. Available releases are downloaded and verified using Tauri's signed updater before installation.
+Intended network access is limited to:
 
-The updater reads the `latest.json` generated by the GitHub release workflow. It never accepts unsigned packages.
+- GitHub Releases for signed application updates;
+- user-initiated model download from a pinned Hugging Face revision;
+- user-initiated runtime download from a pinned `llama.cpp` GitHub Release;
+- optional OpenAI reclaim-by-intent requests;
+- public GitHub release metadata used by the static landing page.
 
-## Safety classes
+Read [Privacy and network access](docs/privacy.md) and [Local data layout](docs/data-layout.md).
 
-- **Safe now** — narrowly scoped disposable data
-- **Rebuild or redownload** — caches that a tool can restore later
-- **Review first** — environments, containers and generated project data
-- **Protected** — data WinReclaim refuses to add to an automatic cleanup plan
+## Download and install
 
-## Explicit exclusions
+Open the [latest GitHub Release](https://github.com/amaansyed27/WinReclaim/releases/latest).
 
-WinReclaim does not:
+Recommended:
 
-- modify the registry
-- promise fake speed improvements
-- delete browser profiles
-- remove Ollama models automatically
-- prune Docker volumes
-- delete Android emulators or SDK packages by raw folder removal
-- follow filesystem reparse points during scanning or cleanup
-- accept arbitrary deletion paths from the frontend
-- let GPT execute or broaden a cleanup plan
-- overwrite files during vault restore
-- install an unsigned update
+- `*-setup.exe` — NSIS installer for most users;
+- `*.msi` — MSI package for managed deployment.
 
-## Architecture
+Official releases should also include `.sig` files and `latest.json` for the in-app updater.
 
-```text
-React desktop UI
-  └─ typed Tauri commands
-      ├─ bounded + dynamic scanner
-      ├─ deterministic rules
-      ├─ snapshot timeline and attribution
-      ├─ Reclaim Passport generator
-      ├─ optional GPT intent constraints
-      ├─ immutable cleanup planner + simulation
-      ├─ allowlisted cleanup adapters
-      ├─ compressed Undo Vault + restore engine
-      ├─ measured receipt persistence
-      └─ signed updater
-```
-
-Rules identify and explain storage. They cannot execute arbitrary commands. Cleanup behaviour lives in compiled Rust adapters.
-
-See:
-
-- [`docs/architecture.md`](docs/architecture.md)
-- [`docs/rules.md`](docs/rules.md)
-- [`docs/safety.md`](docs/safety.md)
-- [`docs/releases.md`](docs/releases.md)
+Primary target: **Windows 11 x64**.
 
 ## Development
 
 Requirements:
 
-- Windows 11
-- Node.js 22+
-- Rust stable with the MSVC toolchain
-- Visual Studio Build Tools with Desktop development with C++
-- WebView2 Runtime
+- Windows 11 x64;
+- Node.js 22+;
+- Rust 1.88+ with MSVC toolchain;
+- Visual Studio Build Tools with Desktop development with C++;
+- Windows SDK;
+- WebView2 Runtime.
+
+Start locally:
 
 ```powershell
-npm install
+git clone https://github.com/amaansyed27/WinReclaim.git
+cd WinReclaim
+npm ci
 npm run tauri dev
 ```
 
-Frontend checks:
+Required validation:
 
 ```powershell
 npm run check
 npm run build
-```
-
-Rust checks:
-
-```powershell
-cd src-tauri
-cargo fmt
-cargo test
-cargo check --all-targets
-cargo clippy --all-targets -- -D warnings
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
 Local installer build:
@@ -229,29 +305,61 @@ Local installer build:
 npm run tauri build
 ```
 
-Official releases are created using **Actions → Release Windows → Run workflow**. The workflow synchronizes versions, validates the project, creates the tag, publishes NSIS and MSI installers, and generates updater signatures plus `latest.json`.
+Read the [Development guide](docs/development.md) and [Testing guide](docs/testing.md).
 
-## Privacy
+## Architecture
 
-The scan, dynamic discovery, snapshots, passports, timeline, plans, cleanup, vault and receipts run locally. WinReclaim does not upload file paths, project names, directory trees or receipts. No telemetry is included.
+```text
+React desktop UI
+  └─ typed Tauri commands
+      ├─ Windows drive/platform APIs
+      ├─ bounded scanner
+      ├─ deterministic rules and protected policy
+      ├─ timeline and Reclaim Passports
+      ├─ optional GPT intent constraints
+      ├─ immutable planner and simulation
+      ├─ compiled cleanup adapters
+      ├─ compressed Undo Vault
+      ├─ measured receipts
+      ├─ optional verified local-model sidecar
+      └─ signed updater
+```
 
-When reclaim-by-intent is enabled, only labels, categories, sizes, safety classes and consequences of currently executable findings are sent to the OpenAI Responses API with response storage disabled. The API key remains in the Rust process environment and is never sent to the webview.
+Rules identify and explain storage. They cannot execute arbitrary commands. Cleanup behaviour lives in reviewed Rust adapters.
 
-Update checks contact only the configured GitHub Releases endpoint and do not upload scan information.
+Read [Architecture](docs/architecture.md) and [Command API](docs/command-api.md).
 
-## Validation
+## Documentation
 
-The Storage Time Machine implementation passed:
+- [Documentation index](docs/README.md)
+- [Architecture](docs/architecture.md)
+- [Safety model](docs/safety.md)
+- [Threat model](docs/threat-model.md)
+- [Rule system](docs/rules.md)
+- [Rule authoring](docs/rule-authoring.md)
+- [Development](docs/development.md)
+- [Testing](docs/testing.md)
+- [Release engineering](docs/releases.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [FAQ](docs/faq.md)
+- [Privacy](docs/privacy.md)
+- [Data layout](docs/data-layout.md)
+- [Licensing](docs/licensing.md)
+- [Build Week origin](docs/build-week.md)
 
-- TypeScript type checking
-- production Vite build
-- 11 Rust tests
-- strict Clippy with warnings denied
+## Contributing and support
 
-## Status
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+- Use [SUPPORT.md](SUPPORT.md) for bug-report requirements.
+- Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+- Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- Project decisions and release authority are described in [GOVERNANCE.md](GOVERNANCE.md).
+- Track user-facing changes in [CHANGELOG.md](CHANGELOG.md).
 
-Storage Time Machine, Reclaim Passports, Reclaim Simulation and the compressed Safe Undo Vault are implemented on `main`. They are not included in an older installed release until a new Windows release is published.
+## Licence and notices
 
-## License
+WinReclaim is released under the [MIT License](LICENSE).
 
-MIT
+Third-party dependencies and optional model/runtime components retain their upstream licences. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licensing.md](docs/licensing.md).
+
+OpenAI, GPT, Qwen, GitHub, Hugging Face, Windows and other product names are trademarks of their respective owners. Their mention does not imply endorsement.

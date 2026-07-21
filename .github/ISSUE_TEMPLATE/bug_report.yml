@@ -1,0 +1,114 @@
+name: Bug report
+description: Report a reproducible WinReclaim problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove usernames, private paths, API keys and other sensitive information. Security vulnerabilities must be reported privately according to SECURITY.md.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am using the latest published WinReclaim release or current main.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: This report does not contain vulnerability details or secrets.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: WinReclaim version
+      description: Use the version displayed in the app or release name.
+      placeholder: 1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and architecture
+      placeholder: Windows 11 24H2, x64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation type
+      options:
+        - NSIS setup executable
+        - MSI installer
+        - Development build
+        - Other or unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      multiple: true
+      options:
+        - Launch or window
+        - Drive detection
+        - Scan
+        - Timeline
+        - Findings or passports
+        - Plan or simulation
+        - Cleanup
+        - Receipt
+        - Undo Vault or restore
+        - Settings or reset
+        - Storage Assistant
+        - OpenAI intent feature
+        - Installer or updater
+        - Landing page
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open WinReclaim
+        2. Select ...
+        3. Start ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scan
+    attributes:
+      label: Relevant scan configuration
+      description: Include selected drive type, profile and options. Do not include private paths.
+      placeholder: Balanced profile, system fixed drive, Windows cache discovery enabled
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error or sanitized logs
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots are useful after private information is removed.
