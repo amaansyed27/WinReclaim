@@ -34,7 +34,9 @@ pub(crate) struct ModelManifest {
 pub fn status(busy: bool) -> StorageAssistantStatus {
     let model_path = model_path();
     let manifest = read_manifest();
-    let file_bytes = fs::metadata(&model_path).map(|metadata| metadata.len()).unwrap_or(0);
+    let file_bytes = fs::metadata(&model_path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     let verified = manifest.as_ref().is_some_and(|manifest| {
         manifest.sha256.eq_ignore_ascii_case(MODEL_SHA256)
             && manifest.bytes == file_bytes
@@ -80,7 +82,9 @@ pub fn analyze(report: &ScanReport) -> Result<StorageAssistantReport> {
 }
 
 pub(crate) fn model_root() -> PathBuf {
-    app_data::app_root().join("models").join("storage-assistant")
+    app_data::app_root()
+        .join("models")
+        .join("storage-assistant")
 }
 
 pub(crate) fn model_path() -> PathBuf {

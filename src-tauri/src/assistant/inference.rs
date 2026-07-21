@@ -64,7 +64,9 @@ pub fn generate(model_path: &Path, prompt: &str, max_output_tokens: i32) -> Resu
         .map(|count| count.get().min(8) as i32)
         .unwrap_or(4);
     let context_params = LlamaContextParams::default()
-        .with_n_ctx(Some(NonZeroU32::new(CONTEXT_TOKENS).expect("context is non-zero")))
+        .with_n_ctx(Some(
+            NonZeroU32::new(CONTEXT_TOKENS).expect("context is non-zero"),
+        ))
         .with_n_threads(threads)
         .with_n_threads_batch(threads);
     let mut context = model
@@ -79,8 +81,7 @@ pub fn generate(model_path: &Path, prompt: &str, max_output_tokens: i32) -> Resu
     }
 
     let max_context = i32::try_from(context.n_ctx()).unwrap_or(i32::MAX);
-    let requested = i32::try_from(prompt_tokens.len())?
-        .saturating_add(max_output_tokens.max(1));
+    let requested = i32::try_from(prompt_tokens.len())?.saturating_add(max_output_tokens.max(1));
     if requested > max_context {
         return Err(anyhow!(
             "The scan report is too large for the local assistant context"
@@ -239,7 +240,9 @@ fn contains_cleanup_claim(value: &str) -> bool {
 fn is_unclear_finding(name: &str, category: &str) -> bool {
     let normalized = name.trim().to_ascii_lowercase();
     category.to_ascii_lowercase().contains("unclassified")
-        || normalized.chars().all(|character| character.is_ascii_digit())
+        || normalized
+            .chars()
+            .all(|character| character.is_ascii_digit())
         || normalized.len() >= 24
             && normalized
                 .chars()
@@ -270,7 +273,9 @@ mod tests {
     #[test]
     fn cleanup_claims_are_rejected() {
         assert!(contains_cleanup_claim("This is safe to delete."));
-        assert!(!contains_cleanup_claim("This appears to be application state."));
+        assert!(!contains_cleanup_claim(
+            "This appears to be application state."
+        ));
     }
 
     #[test]
