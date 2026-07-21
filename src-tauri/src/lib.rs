@@ -30,6 +30,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::start_scan,
             commands::cancel_scan,
+            commands::list_storage_drives,
             commands::get_ai_status,
             commands::interpret_cleanup_intent,
             commands::create_cleanup_plan,
