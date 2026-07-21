@@ -44,6 +44,14 @@ jobs:
           cargo check --manifest-path src-tauri/Cargo.toml --all-targets 2>&1 | Tee-Object -FilePath cargo-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-cargo-lock
+          path: src-tauri/Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Test Rust
         shell: pwsh
         run: |
