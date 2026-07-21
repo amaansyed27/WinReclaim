@@ -46,7 +46,7 @@ export function IntentPlanner({
               onChange={(event) => setPrompt(event.target.value)}
               maxLength={1000}
               disabled={loading}
-              placeholder="Free some space, but keep Downloads and work folders"
+              placeholder="Free some space, but keep downloads and work folders"
             />
             <button
               className="button button-secondary"
@@ -58,7 +58,9 @@ export function IntentPlanner({
           </div>
         </form>
         {summary && <p className="intent-summary">{summary}</p>}
-        <p className="intent-privacy">Folder paths stay on this PC. Currently selected: {formatBytes(selectedBytes)}.</p>
+        <p className="intent-privacy">
+          Paths, usernames, folder names and file contents stay local. Routed by {status?.model}. Currently selected: {formatBytes(selectedBytes)}.
+        </p>
       </div>
     </details>
   );
