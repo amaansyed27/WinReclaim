@@ -22,9 +22,23 @@ export type RecoveryClass =
   | "irreversible"
   | "protected";
 
+export type DriveKind = "fixed" | "removable" | "network" | "optical" | "ram_disk" | "other";
 export type ScanMode = "quick" | "balanced" | "deep";
 
+export interface DriveInfo {
+  root: string;
+  label: string;
+  fileSystem: string;
+  volumeId: string;
+  totalBytes: number;
+  freeBytes: number;
+  usedBytes: number;
+  isSystem: boolean;
+  kind: DriveKind;
+}
+
 export interface ScanOptions {
+  roots: string[];
   mode: ScanMode;
   includeKnownTargets: boolean;
   includeProjectOutputs: boolean;
@@ -63,6 +77,7 @@ export interface ScanReport {
   startedAt: string;
   completedAt: string;
   root: string;
+  drives: DriveInfo[];
   scopeFingerprint: string;
   disk: DiskSnapshot;
   findings: Finding[];
@@ -218,4 +233,18 @@ export interface RestoreResult {
   restoredBytes: number;
   status: VaultStatus;
   message: string;
+}
+
+export interface AppDataSummary {
+  root: string;
+  snapshotCount: number;
+  receiptCount: number;
+  vaultEntryCount: number;
+  vaultBytes: number;
+}
+
+export interface AppDataMutation {
+  removedEntries: number;
+  removedBytes: number;
+  includedRestoreFiles: boolean;
 }
