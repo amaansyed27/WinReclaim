@@ -1,6 +1,6 @@
 # Threat Model
 
-WinReclaim inspects local storage and can remove a limited set of files. The principal security objective is to prevent a benign scan result, compromised webview, malicious filename or stale filesystem state from becoming arbitrary deletion authority.
+WinReclaim inspects local storage and can remove a limited set of files. The principal security objective is to prevent a benign scan result, compromised webview, malicious filename, remote model output or stale filesystem state from becoming arbitrary deletion authority.
 
 ## Security objectives
 
@@ -11,7 +11,8 @@ WinReclaim should:
 - prevent path traversal and link-based escape;
 - preserve plan integrity between review and execution;
 - avoid shell injection;
-- protect updater and optional-download integrity;
+- protect updater integrity;
+- keep provider credentials outside distributed clients;
 - avoid leaking sensitive filesystem metadata;
 - preserve recoverability when an action is labelled reversible;
 - report partial failure rather than hiding it.
@@ -28,7 +29,7 @@ Protected assets include:
 - Windows system files and installed applications;
 - WinReclaim vault payloads;
 - updater private signing key;
-- OpenAI API key;
+- server-side OpenRouter API key;
 - integrity of snapshots, plans, receipts and update metadata.
 
 ## Trust boundaries
@@ -71,35 +72,52 @@ Controls:
 - documented irreversible effects;
 - exit-code and output handling.
 
-### Desktop application to network services
+### Desktop application to WinReclaim proxy
 
-Update checks, optional artifact downloads and optional OpenAI requests cross the local-machine boundary.
-
-Controls:
-
-- minimal documented endpoints;
-- signed Tauri updater artifacts;
-- pinned model/runtime sources;
-- SHA-256 verification;
-- archive extraction path validation;
-- no telemetry;
-- anonymized constrained OpenAI request schema;
-- local core functionality remains available when offline.
-
-### Local assistant prompt to sidecar process
-
-Folder names can contain malicious prompt text, and the sidecar is a downloaded executable.
+Optional assistant requests cross the local-machine boundary only after explicit user action.
 
 Controls:
 
-- verified pinned runtime artifact;
-- model and runtime manifest;
-- paths treated as untrusted prompt data;
-- structured, bounded output validation;
-- finding-ID allowlist;
-- rejection of cleanup claims;
-- advisory-only output;
-- process timeout and constrained arguments.
+- one fixed HTTPS endpoint by default;
+- bounded timeout and request sizes;
+- fixed task names;
+- Rust-built aggregate/anonymized payloads;
+- no paths, drive labels, usernames, folder names, project names, directory trees or file contents;
+- no provider credential in the desktop app;
+- local core functionality remains available offline.
+
+### WinReclaim proxy to OpenRouter
+
+The Vercel serverless function holds the provider key and calls `openrouter/free`.
+
+Controls:
+
+- `OPENROUTER_API_KEY` stored only as a Vercel environment secret;
+- fixed model router and fixed task-specific prompts;
+- strict JSON Schema output;
+- `require_parameters: true` routing constraint;
+- bounded candidates, categories and output tokens;
+- input and output validation;
+- client cannot select a model, tool, arbitrary prompt or provider option;
+- bounded error responses;
+- best-effort per-IP demo throttling;
+- separate provider-side usage/spending guardrail and key rotation.
+
+Residual risk: an internet client can spoof the public desktop header, and in-memory serverless throttling is not globally authoritative. The demo key must therefore have a strict provider-side limit and should be rotated after judging.
+
+### Remote output to Rust selector/presenter
+
+Remote output is untrusted advisory data.
+
+Controls:
+
+- proxy validates structured output before return;
+- Rust validates summary length, observation count, IDs and risk classes again;
+- unknown candidate IDs are rejected;
+- cleanup claims are rejected;
+- remote output cannot create paths, actions or plans;
+- deterministic risk/action fields remain authoritative;
+- failures leave the scan report usable.
 
 ## Threats and mitigations
 
@@ -111,9 +129,9 @@ Controls:
 
 ### Path traversal in persisted data
 
-**Threat:** A malicious vault manifest, archive entry or snapshot contains `..`, absolute paths or alternate prefixes.
+**Threat:** A malicious vault manifest or snapshot contains `..`, absolute paths or alternate prefixes.
 
-**Mitigations:** Use enclosed archive paths, reject absolute/escaping components, store backend-generated manifests and validate restore destinations.
+**Mitigations:** Reject absolute/escaping components, store backend-generated manifests and validate restore destinations.
 
 ### Reparse-point race
 
@@ -145,7 +163,7 @@ Residual risk remains for complex filesystem races; high-risk actions should be 
 
 **Threat:** Users authorize deletion based on fabricated or stale reclaim values.
 
-**Mitigations:** Label projections as estimates, measure free space before/after, report skips and keep runtime-data integrity checks.
+**Mitigations:** Label projections as estimates, measure free space before/after, report skips and keep runtime-data integrity checks. Model summaries cannot replace measurements.
 
 ### Vault overwrite or escape
 
@@ -161,23 +179,35 @@ Residual risk remains for complex filesystem races; high-risk actions should be 
 
 A compromised signing key remains a critical residual risk; offline backup and strict key custody are required.
 
-### Malicious optional artifact
+### Embedded provider-key extraction
 
-**Threat:** The model or runtime provider serves a replaced binary/model.
+**Threat:** A reusable OpenRouter key is compiled into Rust, bundled in frontend JavaScript, placed in Tauri configuration or shipped in an environment file.
 
-**Mitigations:** Pin immutable revisions/tags, verify expected hashes and refuse use when the manifest or file differs.
+**Mitigations:** The desktop contains only the public proxy URL. The provider key exists only in Vercel's server-side environment. Integrity checks reject committed key patterns.
+
+### Proxy abuse and quota exhaustion
+
+**Threat:** Third parties call the public proxy repeatedly and exhaust free-model capacity or account limits.
+
+**Mitigations:** Fixed low-capability tasks, bounded payloads, best-effort IP throttling, provider-side usage limits, dedicated demo key, monitoring and key rotation. No paid fallback should be enabled for the judging key unless intentionally budgeted.
 
 ### Prompt injection
 
-**Threat:** A filename instructs the optional model to claim deletion is safe or change a risk class.
+**Threat:** User intent text or category labels instruct the model to alter safety policy or generate commands.
 
-**Mitigations:** Treat paths as untrusted data, constrain prompt/output, validate IDs and allowed fields, reject deletion language and never use model output to create or execute actions.
+**Mitigations:** Fixed system prompts, structured schemas, no paths/names in payloads, allowlisted risk classes, allowlisted candidate IDs, rejection of cleanup language and no model authority over actions.
 
 ### Sensitive-data exfiltration
 
 **Threat:** Paths, project names or API keys are sent to a network service or logs.
 
-**Mitigations:** Local-first design, documented minimal OpenAI schema, API key in the Rust environment only, no telemetry and redaction guidance.
+**Mitigations:** Aggregate payload construction in Rust, generic consequence classes, server-side-only provider key, no telemetry, bounded errors and redaction guidance. Production proxy diagnostics must not log full request bodies.
+
+### Malicious or incorrect routed model
+
+**Threat:** The free router selects a weak or adversarial model that returns unsafe or fabricated output.
+
+**Mitigations:** The model receives no execution authority; strict schemas and dual validation bound accepted fields; routed model identity is displayed; unsafe output is rejected; deterministic UI remains available.
 
 ## Assumptions
 
@@ -188,6 +218,7 @@ The current model assumes:
 - the underlying filesystem and Windows APIs behave according to documented semantics;
 - official releases are obtained from the configured GitHub repository;
 - the embedded public updater key is authentic;
+- Vercel correctly protects configured environment secrets;
 - local administrators can always modify application files and state.
 
 WinReclaim is not a sandbox or endpoint-security product and cannot protect against a hostile local administrator.
@@ -214,7 +245,7 @@ Update this threat model when a change:
 - changes vault restoration;
 - introduces elevated privileges;
 - changes updater signing or endpoints;
-- adds a model/runtime provider;
+- changes proxy tasks, transmitted fields, model routing or provider credentials;
 - permits plugins or community rules;
 - follows links or reparse points;
 - exposes a new Tauri mutation command.
