@@ -115,9 +115,7 @@ fn build_payload(report: &ScanReport) -> StorageSummaryPayload {
             RiskClass::RebuildOrRedownload => {
                 entry.rebuild_or_redownload = entry.rebuild_or_redownload.saturating_add(1)
             }
-            RiskClass::ReviewFirst => {
-                entry.review_first = entry.review_first.saturating_add(1)
-            }
+            RiskClass::ReviewFirst => entry.review_first = entry.review_first.saturating_add(1),
             RiskClass::Protected => entry.protected = entry.protected.saturating_add(1),
         }
     }
