@@ -23,9 +23,10 @@ Primary supported target:
 
 - Windows 11 x64;
 - WebView2 Runtime;
-- sufficient free space for the application and any optional Storage Assistant download.
+- sufficient free space for the application and selected cleanup/restore operations;
+- an internet connection only for updates and optional cloud assistance.
 
-The optional local Storage Assistant requires approximately 1.4 GB for the model plus runtime and working space. Core WinReclaim features do not require it.
+Version 1.2.1 does not download or install local model weights or an inference runtime.
 
 ## Installer verification
 
@@ -61,10 +62,23 @@ On first launch:
 - WinReclaim initializes `%LOCALAPPDATA%\WinReclaim`;
 - no cleanup runs automatically;
 - a first completed scan creates the timeline baseline;
-- the optional Storage Assistant remains uninstalled;
-- the optional OpenAI feature remains unavailable unless a key is supplied to the process environment.
+- no model or provider key is requested;
+- optional Storage Assistant and reclaim-by-intent controls call the WinReclaim cloud proxy only after explicit user action;
+- version 1.2.1 removes the retired `%LOCALAPPDATA%\WinReclaim\models\storage-assistant` directory if it exists.
 
 Start with a Quick or Balanced scan of the system fixed drive.
+
+## Optional cloud assistance
+
+Judges and normal users do not need an OpenRouter key. The desktop app embeds only this public proxy endpoint:
+
+```text
+https://winreclaim.vercel.app/api/assistant
+```
+
+The provider credential is stored as a server-side Vercel environment secret. Paths, drive labels, usernames, folder names, project names, directory trees and file contents are excluded from assistant requests.
+
+Free model availability can vary. A cloud failure does not block scanning, planning, cleanup, history, receipts or restoration.
 
 ## Updates
 
@@ -100,11 +114,22 @@ Uninstalling the application may not remove all local application data under:
 %LOCALAPPDATA%\WinReclaim
 ```
 
-This can preserve snapshots, receipts, vault entries or optional model files depending on installer behaviour. Review and remove the directory manually only after confirming that no restore payload is needed.
+This can preserve snapshots, receipts or vault entries depending on installer behaviour. Review and remove the directory manually only after confirming that no restore payload is needed.
 
-## Remove the optional Storage Assistant
+## Remove retired local assistant files manually
 
-Use Settings to uninstall the assistant. This removes its model/runtime directory without removing scan history, receipts or vault data.
+Close WinReclaim, then run:
+
+```powershell
+Remove-Item -LiteralPath "$env:LOCALAPPDATA\WinReclaim\models\storage-assistant" -Recurse -Force -ErrorAction SilentlyContinue
+
+$models = "$env:LOCALAPPDATA\WinReclaim\models"
+if ((Test-Path $models) -and -not (Get-ChildItem -LiteralPath $models -Force | Select-Object -First 1)) {
+    Remove-Item -LiteralPath $models -Force
+}
+```
+
+This does not remove scan history, receipts or Undo Vault data. Version 1.2.1 performs the same owned-directory cleanup automatically during startup.
 
 ## Clean reinstall
 
@@ -119,14 +144,13 @@ For a clean test environment:
 
 ## Offline use
 
-After installation, core scanning, findings, planning, cleanup, receipts and vault restoration can operate offline.
+Core scanning, findings, planning, cleanup, receipts, history and vault restoration operate offline.
 
 Network access is required only for:
 
-- checking/downloading application updates;
-- installing the optional model/runtime;
-- invoking the optional OpenAI reclaim-by-intent feature.
+- checking or downloading application updates;
+- invoking optional Storage Assistant or reclaim-by-intent assistance.
 
 ## Troubleshooting
 
-See [troubleshooting.md](troubleshooting.md) for installer, SmartScreen, updater and runtime failures.
+See [troubleshooting.md](troubleshooting.md) for installer, SmartScreen, updater and cloud-assistant failures.
