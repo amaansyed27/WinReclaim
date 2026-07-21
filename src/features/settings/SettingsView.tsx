@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { StorageAssistantSettings } from "../assistant/StorageAssistantSettings";
 import { formatBytes } from "../../lib/format";
 import type { AppPreferences, DefaultScanProfile } from "../../lib/settings";
 import {
@@ -152,6 +153,8 @@ export function SettingsView({
         </label>
       </section>
 
+      <StorageAssistantSettings disabled={scanning || busyAction !== null} />
+
       <section className="surface settings-section">
         <div className="settings-section-head">
           <div>
@@ -245,7 +248,7 @@ export function SettingsView({
           <div>
             <span className="surface-label">Reset</span>
             <h2>Start WinReclaim fresh</h2>
-            <p>Clears scans, history, plans, receipts and saved preferences. Restore files are preserved unless explicitly included.</p>
+            <p>Clears scans, history, plans, receipts and saved preferences. Restore files and the separately managed Storage Assistant model are preserved.</p>
           </div>
           {!resetOpen && (
             <button className="button button-danger" type="button" disabled={scanning} onClick={() => setResetOpen(true)}>

@@ -1,0 +1,224 @@
+.assistant-settings-section,
+.assistant-report-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.assistant-settings-head,
+.assistant-report-head {
+  align-items: flex-start;
+}
+
+.assistant-status-pill {
+  border: 1px solid var(--line, rgba(18, 24, 38, 0.14));
+  border-radius: 999px;
+  color: var(--muted, #667085);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.assistant-status-pill.is-ready {
+  background: rgba(25, 135, 84, 0.08);
+  border-color: rgba(25, 135, 84, 0.22);
+  color: #157347;
+}
+
+.assistant-model-card {
+  border-bottom: 1px solid var(--line, rgba(18, 24, 38, 0.12));
+  border-top: 1px solid var(--line, rgba(18, 24, 38, 0.12));
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.assistant-model-card > div {
+  display: grid;
+  gap: 3px;
+}
+
+.assistant-model-card > div:last-child {
+  text-align: right;
+}
+
+.assistant-model-card span,
+.assistant-run-row span,
+.assistant-empty-state span,
+.assistant-annotations small,
+.assistant-report-footer span {
+  color: var(--muted, #667085);
+  font-size: 13px;
+}
+
+.assistant-download {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-download > div:first-child,
+.assistant-report-footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.assistant-download-track {
+  background: rgba(18, 24, 38, 0.08);
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+}
+
+.assistant-download-track span {
+  background: currentColor;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.assistant-download small,
+.assistant-privacy-note,
+.assistant-advisory-note {
+  color: var(--muted, #667085);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.assistant-boundaries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assistant-boundaries span {
+  background: rgba(18, 24, 38, 0.05);
+  border-radius: 999px;
+  color: var(--muted, #667085);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 9px;
+}
+
+.assistant-settings-actions,
+.assistant-run-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.assistant-settings-actions {
+  justify-content: flex-end;
+}
+
+.assistant-empty-state {
+  background: rgba(18, 24, 38, 0.035);
+  border: 1px dashed var(--line, rgba(18, 24, 38, 0.16));
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.assistant-run-row > div {
+  display: grid;
+  gap: 5px;
+}
+
+.assistant-report-content {
+  display: grid;
+  gap: 20px;
+}
+
+.assistant-summary-block,
+.assistant-observations,
+.assistant-annotations {
+  display: grid;
+  gap: 10px;
+}
+
+.assistant-summary-block > span,
+.assistant-observations > span,
+.assistant-annotations > div > span {
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.assistant-summary-block p,
+.assistant-observations ul {
+  line-height: 1.65;
+  margin: 0;
+}
+
+.assistant-observations ul {
+  padding-left: 20px;
+}
+
+.assistant-observations li + li {
+  margin-top: 7px;
+}
+
+.assistant-annotations > div {
+  display: grid;
+  gap: 4px;
+}
+
+.assistant-annotations article {
+  border-top: 1px solid var(--line, rgba(18, 24, 38, 0.12));
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 14px;
+}
+
+.assistant-annotations article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.assistant-annotations article p,
+.assistant-annotations article code {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.assistant-annotations article p {
+  color: var(--muted, #667085);
+  line-height: 1.5;
+}
+
+.assistant-annotations article code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.assistant-report-footer {
+  border-top: 1px solid var(--line, rgba(18, 24, 38, 0.12));
+  padding-top: 16px;
+}
+
+.assistant-advisory-note {
+  border-top: 1px solid var(--line, rgba(18, 24, 38, 0.12));
+  padding-top: 14px;
+}
+
+@media (max-width: 760px) {
+  .assistant-model-card,
+  .assistant-run-row,
+  .assistant-report-footer,
+  .assistant-settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistant-model-card > div:last-child {
+    text-align: left;
+  }
+}

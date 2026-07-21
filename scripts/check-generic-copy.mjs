@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 const genericUiFiles = [
   "src/App.tsx",
   "src/components/Sidebar.tsx",
+  "src/features/assistant/StorageAssistantPanel.tsx",
+  "src/features/assistant/StorageAssistantSettings.tsx",
   "src/features/findings/FindingsView.tsx",
   "src/features/findings/FindingRow.tsx",
   "src/features/findings/IntentPlanner.tsx",
@@ -130,6 +132,9 @@ for (const required of ["DATA_GENERATION", "clear_scan_history", "clear_cleanup_
 if (!appDataBackend.includes("if !request.include_restore_files")) {
   violations.push("src-tauri/src/app_data.rs: factory reset no longer preserves Restore files by default");
 }
+if (!appDataBackend.includes('name == "models"')) {
+  violations.push("src-tauri/src/app_data.rs: application reset no longer preserves the optional model");
+}
 
 const commandBackend = readFileSync("src-tauri/src/commands/mod.rs", "utf8");
 for (const required of [
@@ -153,9 +158,37 @@ for (const required of ["listStorageDrives", "selectedRoots", "DrivePicker", "In
 }
 
 const findingsView = readFileSync("src/features/findings/FindingsView.tsx", "utf8");
-for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilter", "storageGroups"]) {
+for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilter", "storageGroups", "StorageAssistantPanel"]) {
   if (!findingsView.includes(required)) {
-    violations.push(`src/features/findings/FindingsView.tsx: missing deterministic grouping "${required}"`);
+    violations.push(`src/features/findings/FindingsView.tsx: missing report behavior "${required}"`);
+  }
+}
+
+const assistantBackend = readFileSync("src-tauri/src/assistant/mod.rs", "utf8");
+for (const required of ["Qwen3.5-2B", "Q4_K_M", "MODEL_SHA256", "pub fn analyze"]) {
+  if (!assistantBackend.includes(required)) {
+    violations.push(`src-tauri/src/assistant/mod.rs: missing local assistant contract "${required}"`);
+  }
+}
+
+const assistantInference = readFileSync("src-tauri/src/assistant/inference.rs", "utf8");
+for (const required of ["advisory_only: true", "contains_cleanup_claim", "finding_ids.contains", "MAX_ANNOTATIONS"]) {
+  if (!assistantInference.includes(required)) {
+    violations.push(`src-tauri/src/assistant/inference.rs: missing output safeguard "${required}"`);
+  }
+}
+
+const assistantPrompt = readFileSync("src-tauri/src/assistant/prompt.rs", "utf8");
+for (const required of ["untrusted data", "Never say a folder is safe to delete", "Never change or reinterpret risk_class"]) {
+  if (!assistantPrompt.includes(required)) {
+    violations.push(`src-tauri/src/assistant/prompt.rs: missing authority boundary "${required}"`);
+  }
+}
+
+const appLib = readFileSync("src-tauri/src/lib.rs", "utf8");
+for (const command of ["get_storage_assistant_status", "install_storage_assistant", "uninstall_storage_assistant", "analyze_storage_report"]) {
+  if (!appLib.includes(command)) {
+    violations.push(`src-tauri/src/lib.rs: missing assistant command "${command}"`);
   }
 }
 

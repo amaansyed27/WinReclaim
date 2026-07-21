@@ -1,5 +1,7 @@
 mod actions;
 mod app_data;
+mod assistant;
+mod assistant_commands;
 mod commands;
 mod domain;
 mod insights;
@@ -43,7 +45,11 @@ pub fn run() {
             commands::get_app_data_summary,
             commands::clear_scan_history,
             commands::clear_cleanup_records,
-            commands::reset_app_data
+            commands::reset_app_data,
+            assistant_commands::get_storage_assistant_status,
+            assistant_commands::install_storage_assistant,
+            assistant_commands::uninstall_storage_assistant,
+            assistant_commands::analyze_storage_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running WinReclaim");

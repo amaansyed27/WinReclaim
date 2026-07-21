@@ -88,7 +88,7 @@ pub fn reset(request: &ResetAppRequest) -> Result<AppDataMutation> {
     for entry in fs::read_dir(&root)? {
         let entry = entry?;
         let name = entry.file_name();
-        if name == DATA_GENERATION_FILE {
+        if name == DATA_GENERATION_FILE || name == "models" {
             continue;
         }
         if !request.include_restore_files && name == "vault" {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowIcon, ShieldIcon } from "../../components/Icons";
+import { StorageAssistantPanel } from "../assistant/StorageAssistantPanel";
 import { formatBytes } from "../../lib/format";
 import {
   driveForFinding,
@@ -120,6 +121,8 @@ export function FindingsView({
       </header>
 
       <StorageOverview report={report} />
+
+      <StorageAssistantPanel report={report} />
 
       {drives.length > 1 && (
         <section className="surface drive-filter" aria-label="Filter results by drive">
