@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppState {
     pub cancel_scan: Arc<AtomicBool>,
+    pub assistant_busy: Arc<AtomicBool>,
     pub latest_scan: Arc<Mutex<Option<ScanReport>>>,
     pub plans: Arc<Mutex<HashMap<Uuid, CleanupPlan>>>,
     pub receipts: Arc<Mutex<Vec<CleanupReceipt>>>,
@@ -15,6 +16,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             cancel_scan: Arc::new(AtomicBool::new(false)),
+            assistant_busy: Arc::new(AtomicBool::new(false)),
             latest_scan: Arc::new(Mutex::new(None)),
             plans: Arc::new(Mutex::new(HashMap::new())),
             receipts: Arc::new(Mutex::new(Vec::new())),
