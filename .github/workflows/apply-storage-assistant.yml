@@ -76,7 +76,7 @@ jobs:
           marker = '\nif (violations.length) {\n'
           checks = r'''
 const assistantBackend = readFileSync("src-tauri/src/assistant/mod.rs", "utf8");
-for (const required of ["Qwen3.5-2B", "Q4_K_M", "MODEL_SHA256", "assistant::analyze"]) {
+for (const required of ["Qwen3.5-2B", "Q4_K_M", "MODEL_SHA256", "pub fn analyze"]) {
   if (!assistantBackend.includes(required)) {
     violations.push(`src-tauri/src/assistant/mod.rs: missing local assistant contract "${required}"`);
   }
