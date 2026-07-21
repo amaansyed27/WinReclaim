@@ -1,0 +1,377 @@
+/* Storage review refresh: clearer hierarchy, readable density, and no content-obscuring dock. */
+.simple-findings-view {
+  max-width: 1180px;
+  padding-bottom: 28px;
+}
+
+.findings-page-header {
+  align-items: center;
+  min-height: 92px;
+  padding-bottom: 18px;
+}
+
+.findings-page-header h1 {
+  font-size: 31px;
+}
+
+.findings-page-header p {
+  max-width: 650px;
+  font-size: 13px;
+}
+
+.report-header-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(7, 20, 35, 0.68);
+}
+
+.report-header-metrics > div {
+  min-width: 100px;
+  padding: 11px 14px;
+}
+
+.report-header-metrics > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.report-header-metrics span,
+.report-header-metrics strong {
+  display: block;
+}
+
+.report-header-metrics span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.report-header-metrics strong {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.simple-findings-view .storage-overview {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 12px;
+}
+
+.simple-findings-view .storage-overview-head h2 {
+  margin-top: 4px;
+  font-size: 19px;
+}
+
+.simple-findings-view .storage-overview-head p {
+  max-width: 720px;
+  font-size: 11px;
+}
+
+.report-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(270px, 0.78fr) minmax(0, 1.22fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.simple-findings-view .overview-drive-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.simple-findings-view .overview-drive-grid article {
+  min-height: 116px;
+  display: grid;
+  align-content: center;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(64, 151, 238, 0.13), transparent 44%),
+    rgba(6, 19, 33, 0.66);
+}
+
+.overview-drive-title,
+.overview-drive-numbers,
+.storage-category-list article > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.overview-drive-title > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.overview-drive-title strong {
+  color: var(--text);
+  font-size: 19px;
+}
+
+.overview-drive-title span,
+.overview-drive-title b,
+.overview-drive-numbers span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.overview-drive-numbers strong {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.simple-findings-view .overview-drive-bar {
+  height: 6px;
+}
+
+.storage-category-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.storage-category-list article {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(7, 21, 36, 0.54);
+}
+
+.storage-category-list article > div span {
+  color: var(--muted-strong);
+  font-size: 10px;
+}
+
+.storage-category-list article > div strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.storage-category-bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(109, 145, 184, 0.14);
+}
+
+.storage-category-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #347fbd, #63b8ed);
+}
+
+.storage-category-list small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-action-grid {
+  display: grid;
+  grid-template-columns: minmax(330px, 0.86fr) minmax(430px, 1.14fr);
+  gap: 14px;
+  margin-top: 14px;
+  align-items: stretch;
+}
+
+.report-action-grid .cleanup-recommendation {
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 20px;
+  border-radius: 12px;
+  border-color: rgba(87, 214, 160, 0.24);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(87, 214, 160, 0.1), transparent 45%),
+    linear-gradient(160deg, rgba(18, 52, 46, 0.74), rgba(8, 25, 31, 0.88));
+}
+
+.recommendation-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.report-action-grid .recommendation-check {
+  width: 36px;
+  height: 36px;
+  margin-top: 1px;
+}
+
+.report-action-grid .cleanup-recommendation h2 {
+  margin: 6px 0 5px;
+  font-size: 21px;
+}
+
+.report-action-grid .cleanup-recommendation p {
+  max-width: 480px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.report-action-grid .recommendation-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  justify-content: stretch;
+}
+
+.report-action-grid .recommendation-actions .button {
+  width: 100%;
+  min-height: 37px;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.simple-findings-view .drive-filter {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 9px;
+}
+
+.simple-findings-view .finding-filter-bar {
+  margin-top: 14px;
+  padding: 13px 15px;
+}
+
+.simple-findings-view .finding-filter-bar label > span,
+.simple-findings-view .finding-filter-bar > span {
+  font-size: 10px;
+}
+
+.simple-findings-view .finding-filter-bar input {
+  height: 40px;
+  font-size: 12px;
+}
+
+.simple-findings-view .simple-finding-group,
+.simple-findings-view .review-only-folders {
+  margin-top: 14px;
+  border-radius: 9px;
+}
+
+.simple-findings-view .simple-finding-group .finding-group-head {
+  min-height: 66px;
+  padding: 13px 16px;
+}
+
+.simple-findings-view .simple-finding-group .finding-group-head h2 {
+  font-size: 16px;
+}
+
+.simple-findings-view .simple-finding-group .finding-group-head p {
+  font-size: 11px;
+}
+
+.simple-findings-view .group-summary span {
+  font-size: 10px;
+}
+
+.simple-findings-view .group-summary strong {
+  font-size: 13px;
+}
+
+.simple-findings-view .simple-finding-row {
+  grid-template-columns: 30px minmax(0, 1fr) 130px;
+  gap: 14px;
+  padding: 15px 16px;
+}
+
+.simple-findings-view .simple-finding-row .finding-main h3 {
+  font-size: 13px;
+}
+
+.simple-findings-view .simple-finding-row .finding-main > p {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.simple-findings-view .finding-details > summary {
+  font-size: 10px;
+}
+
+.simple-findings-view .simple-finding-row .finding-size strong {
+  font-size: 14px;
+}
+
+.simple-findings-view .simple-finding-row .finding-size span,
+.simple-findings-view .finding-details-content code,
+.simple-findings-view .finding-details-content dt,
+.simple-findings-view .finding-details-content dd {
+  font-size: 9px;
+}
+
+.simple-findings-view .review-only-folders > summary {
+  padding: 16px;
+}
+
+.simple-findings-view .simple-sticky-action-bar {
+  position: static;
+  min-height: 64px;
+  margin-top: 18px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.simple-findings-view .simple-sticky-action-bar .selection-summary span {
+  font-size: 10px;
+}
+
+.simple-findings-view .simple-sticky-action-bar .selection-summary strong {
+  font-size: 16px;
+}
+
+@media (max-width: 1120px) {
+  .report-overview-layout,
+  .report-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .simple-findings-view .overview-drive-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .findings-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .report-header-metrics {
+    width: 100%;
+  }
+
+  .storage-category-list {
+    grid-template-columns: 1fr;
+  }
+
+  .simple-findings-view .simple-finding-row {
+    grid-template-columns: 28px minmax(0, 1fr) 105px;
+  }
+}
