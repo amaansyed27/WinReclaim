@@ -22,25 +22,29 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           profile = Path('src-tauri/src/scanner/profile.rs')
           source = profile.read_text()
-          old = '''        let canonical = requested_root
-              .canonicalize()
-              .unwrap_or_else(|_| requested_root.clone());
-          let key = canonical.to_string_lossy().to_ascii_lowercase();
-          if seen.insert(key) {
-              roots.push(canonical);
-          }
-          '''
-          new = '''        let key = requested_root.to_string_lossy().to_ascii_lowercase();
-          if seen.insert(key) {
-              roots.push(requested_root);
-          }
-          '''
-          if old not in source:
+          pattern = re.compile(
+              r'        let canonical = requested_root\n'
+              r'            \.canonicalize\(\)\n'
+              r'            \.unwrap_or_else\(\|_\| requested_root\.clone\(\)\);\n'
+              r'        let key = canonical\.to_string_lossy\(\)\.to_ascii_lowercase\(\);\n'
+              r'        if seen\.insert\(key\) \{\n'
+              r'            roots\.push\(canonical\);\n'
+              r'        \}\n'
+          )
+          replacement = (
+              '        let key = requested_root.to_string_lossy().to_ascii_lowercase();\n'
+              '        if seen.insert(key) {\n'
+              '            roots.push(requested_root);\n'
+              '        }\n'
+          )
+          source, count = pattern.subn(replacement, source, count=1)
+          if count != 1:
               raise SystemExit('resolve_roots block not found')
-          profile.write_text(source.replace(old, new, 1))
+          profile.write_text(source)
 
           policy = Path('src-tauri/src/policy.rs')
           source = policy.read_text()
