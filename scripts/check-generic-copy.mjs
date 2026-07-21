@@ -57,7 +57,7 @@ for (const field of ["confidenceScore", "estimatedRecoveryMinutes", "protectedSu
   if (frontendTypes.includes(field)) violations.push(`src/types.ts: obsolete field "${field}"`);
 }
 for (const action of ["prefetch", "generic_directory"]) {
-  if (!frontendTypes.includes(`\"${action}\"`)) {
+  if (!frontendTypes.includes(`"${action}"`)) {
     violations.push(`src/types.ts: missing action kind "${action}"`);
   }
 }
@@ -189,7 +189,12 @@ for (const required of ["GithubRelease", "runtime_sha256", "ZipArchive", "enclos
 const assistantInference = readFileSync("src-tauri/src/assistant/inference.rs", "utf8");
 for (const required of [
   "Command::new",
+  "--conversation",
   "--single-turn",
+  "--system-prompt-file",
+  "--json-schema-file",
+  "--output-file",
+  "--reasoning-budget",
   "advisory_only: true",
   "contains_cleanup_claim",
   "finding_ids.contains",
