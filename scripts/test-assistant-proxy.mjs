@@ -10,6 +10,10 @@ try {
   await rejectsUnexpectedTopLevelFields();
   await stripsUnapprovedStorageFields();
   await stripsUnapprovedIntentFields();
+  await acceptsJsonInsideMarkdownFences();
+  await fallsBackAfterMalformedResponses();
+  await fallsBackAfterUnavailableUpstream();
+  await fallsBackWhenKeyIsMissing();
   console.log("WinReclaim assistant proxy tests passed.");
 } finally {
   globalThis.fetch = originalFetch;
@@ -113,6 +117,118 @@ async function stripsUnapprovedIntentFields() {
   assert.equal(prompt.includes("hidden_instruction"), false);
   assert.equal(prompt.includes("C:\\Users\\Secret"), false);
   assert.equal(prompt.includes(candidateId), true);
+}
+
+async function acceptsJsonInsideMarkdownFences() {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    model: "test/fenced-model",
+    choices: [{
+      message: {
+        content: `\`\`\`json
+{"summary":"The measured drive totals are available and remain authoritative for this completed scan.","observations":["Category rows may overlap."]}
+\`\`\``
+      }
+    }]
+  }), { status: 200 });
+
+  const res = responseRecorder();
+  await handler(request({ task: "storage_summary", data: storageData() }, "10.0.0.5"), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.model, "test/fenced-model");
+  assert.equal(res.body.result.observations.length, 1);
+}
+
+async function fallsBackAfterMalformedResponses() {
+  let attempts = 0;
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    attempts += 1;
+    requests.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({
+      model: "test/malformed-model",
+      choices: [{ message: { content: "I could not produce JSON." } }]
+    }), { status: 200 });
+  };
+
+  const res = responseRecorder();
+  await handler(request({ task: "storage_summary", data: storageData() }, "10.0.0.6"), res);
+  assert.equal(attempts, 2);
+  assert.equal(requests[0].response_format.type, "json_schema");
+  assert.equal("response_format" in requests[1], false);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.model, "winreclaim/deterministic-fallback");
+  assert.match(res.body.result.summary, /deterministic scan totals/);
+}
+
+async function fallsBackAfterUnavailableUpstream() {
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return new Response("Service unavailable", { status: 503 });
+  };
+
+  const res = responseRecorder();
+  await handler(request({ task: "intent_constraints", data: intentData() }, "10.0.0.7"), res);
+  assert.equal(attempts, 2);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.model, "winreclaim/deterministic-fallback");
+  assert.deepEqual(res.body.result.allowed_risk_classes, ["safe_now"]);
+}
+
+async function fallsBackWhenKeyIsMissing() {
+  delete process.env.OPENROUTER_API_KEY;
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    throw new Error("fetch must not run without a key");
+  };
+
+  try {
+    const res = responseRecorder();
+    await handler(request({ task: "storage_summary", data: storageData() }, "10.0.0.8"), res);
+    assert.equal(called, false);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.model, "winreclaim/deterministic-fallback");
+  } finally {
+    process.env.OPENROUTER_API_KEY = "test-only-key";
+  }
+}
+
+function storageData() {
+  return {
+    used_bytes: 4_000_000_000,
+    free_bytes: 2_000_000_000,
+    total_bytes: 6_000_000_000,
+    drive_count: 1,
+    scanned_entries: 100,
+    skipped_entries: 2,
+    rows_may_overlap: true,
+    categories: [{
+      category: "Temporary files",
+      bytes: 500_000_000,
+      locations: 3,
+      actionable_locations: 2,
+      risk_counts: {
+        safe_now: 2,
+        rebuild_or_redownload: 0,
+        review_first: 1,
+        protected: 0
+      }
+    }]
+  };
+}
+
+function intentData() {
+  return {
+    prompt: "Use only low-impact cleanup",
+    candidates: [{
+      candidate_id: "123e4567-e89b-42d3-a456-426614174001",
+      category: "Temporary files",
+      size_bytes: 200,
+      risk_class: "safe_now",
+      consequence: "temporary_or_disposable"
+    }]
+  };
 }
 
 function request(body, ip) {
