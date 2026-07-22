@@ -42,14 +42,14 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-title-group">
           <span className="assistant-panel-icon" aria-hidden="true"><ScanIcon /></span>
           <div>
-            <span className="surface-label">Optional cloud insight</span>
-            <h2>Storage Assistant</h2>
-            <p>Creates a short explanation from anonymized scan totals without changing any cleanup decision.</p>
+            <span className="surface-label">Local deterministic insight</span>
+            <h2>Storage Brief</h2>
+            <p>Builds a concise explanation from the completed scan without a model, account, API key, or network request.</p>
           </div>
         </div>
         <span className={`assistant-status-pill ${available ? "is-ready" : ""}`}>
           <i aria-hidden="true" />
-          {available ? "Available" : "Unavailable"}
+          {available ? "Ready offline" : "Unavailable"}
         </span>
       </div>
 
@@ -57,10 +57,10 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-run-row">
           <div className="assistant-model-summary">
             <strong>{status?.provider}</strong>
-            <span>Uses {status?.model} · free routed cloud model · no API key entry required</span>
+            <span>Uses {status?.model} · instant local rules · no download required</span>
           </div>
           <button className="button button-primary assistant-run-button" onClick={() => void analyze()}>
-            Generate summary
+            Generate brief
           </button>
         </div>
       )}
@@ -68,7 +68,7 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
       {!available && !loading && (
         <div className="assistant-empty-state">
           <div>
-            <strong>Cloud assistant is temporarily unavailable</strong>
+            <strong>Storage Brief is unavailable</strong>
             <span>The deterministic scan and cleanup workflow still works normally.</span>
           </div>
         </div>
@@ -78,8 +78,8 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
         <div className="assistant-loading-state" role="status" aria-live="polite">
           <span className="assistant-spinner" aria-hidden="true" />
           <div>
-            <strong>Analyzing anonymized scan metadata</strong>
-            <span>OpenRouter is selecting an available free model that supports structured output.</span>
+            <strong>Building the local storage brief</strong>
+            <span>WinReclaim is aggregating measured totals, safety classes, and verified action counts.</span>
           </div>
         </div>
       )}
@@ -103,9 +103,9 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
           )}
 
           <div className="assistant-report-footer">
-            <span>Routed model: {assistantReport.model}</span>
+            <span>Engine: {assistantReport.model}</span>
             <button className="button button-secondary" onClick={() => void analyze()}>
-              Regenerate
+              Refresh
             </button>
           </div>
         </div>
@@ -114,8 +114,8 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
       {error && !loading && (
         <div className="assistant-error" role="alert">
           <div>
-            <strong>Summary generation failed</strong>
-            <span>The scan is unaffected. Free model capacity may be busy; retry after a moment.</span>
+            <strong>Brief generation failed</strong>
+            <span>The scan is unaffected. Retry or continue with the measured findings below.</span>
           </div>
           <button className="button button-secondary" onClick={() => void analyze()} disabled={!available}>Retry</button>
           <details>
@@ -126,10 +126,10 @@ export function StorageAssistantPanel({ report }: StorageAssistantPanelProps) {
       )}
 
       <p className="assistant-privacy-note">
-        {status?.privacyNote ?? "Paths, usernames, folder names, project names and file contents stay local."}
+        {status?.privacyNote ?? "The brief is generated locally and does not contact a remote service."}
       </p>
       <p className="assistant-advisory-note">
-        Advisory only. The assistant cannot enable cleanup, select findings, alter safety labels or delete files.
+        Explanatory only. The brief cannot enable cleanup, select findings, alter safety labels, or delete files.
       </p>
     </section>
   );
