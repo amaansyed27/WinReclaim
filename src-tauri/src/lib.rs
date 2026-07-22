@@ -2,7 +2,6 @@ mod actions;
 mod app_data;
 mod assistant;
 mod assistant_commands;
-mod cloud;
 mod commands;
 mod domain;
 mod insights;
