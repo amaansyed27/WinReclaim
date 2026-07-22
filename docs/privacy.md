@@ -1,6 +1,6 @@
 # Privacy and Network Access
 
-WinReclaim is local-first. Scanning, classification, snapshots, planning, cleanup, receipts and vault restoration run on the user's Windows device.
+WinReclaim is local-first. Scanning, classification, Storage Brief generation, reclaim-by-intent parsing, snapshots, planning, cleanup, receipts, and vault restoration run on the user's Windows device.
 
 ## Data that remains local
 
@@ -13,82 +13,40 @@ WinReclaim does not intentionally upload:
 - project names;
 - directory trees;
 - file contents;
-- scan snapshots;
+- scan metadata or snapshots;
+- intent text;
 - cleanup plans;
 - receipts;
 - vault payloads.
 
-No product telemetry or analytics service is included in the desktop application.
+No product telemetry, analytics, crash-reporting service, remote model provider, or cloud assistant is included in the desktop application.
 
-## Intended network activity
-
-Network access occurs only for specific optional or maintenance features.
+## Intended desktop network activity
 
 ### Signed application updates
 
-WinReclaim checks the configured GitHub Releases endpoint for `latest.json` and downloads an update only after user interaction or the application's update flow. Tauri verifies the updater signature against the public key embedded in the application.
+WinReclaim checks the configured GitHub Releases endpoint for `latest.json`. Update downloads occur through the application update flow and are verified by Tauri against the public key embedded in the application.
 
-The update request does not include scan results or application-data contents.
+Update requests do not include scan results or application-data contents.
 
-### Optional OpenRouter cloud assistance
+### No assistant network access
 
-When the user explicitly requests a Storage Assistant summary or reclaim-by-intent suggestion, the Rust backend sends bounded metadata to the WinReclaim server-side proxy:
+Storage Brief and reclaim-by-intent run through deterministic local Rust rules. They do not require:
 
-```text
-https://winreclaim.vercel.app/api/assistant
-```
+- an API key;
+- a model download;
+- a provider SDK;
+- a hosted function;
+- an account;
+- a network connection.
 
-The proxy stores the OpenRouter credential as a server-side Vercel environment secret and requests the `openrouter/free` router. The provider key is not included in the desktop binary, source code, webview or request payload.
+The retired OpenRouter/Vercel proxy is not used by version 1.2.1 or later.
 
-A storage-summary request may contain:
+## Landing page
 
-- aggregate used, free and total bytes;
-- drive count;
-- scanned and skipped entry counts;
-- category names;
-- reported bytes and location counts per category;
-- actionable location counts;
-- counts by deterministic risk class;
-- an overlap warning for category rows.
+The static landing page may request public GitHub Release metadata to resolve the newest installer links. It does not receive desktop application data.
 
-A reclaim-by-intent request may additionally contain:
-
-- the user's intent sentence;
-- backend-generated opaque candidate IDs;
-- candidate category;
-- measured size;
-- deterministic risk class;
-- deterministic recovery consequence.
-
-These requests must not contain:
-
-- filesystem paths;
-- drive roots or labels;
-- usernames;
-- folder or file names;
-- project names;
-- directory trees;
-- file contents;
-- arbitrary cleanup commands;
-- provider API keys.
-
-The proxy accepts only fixed assistant tasks, validates request size and shape, constrains output with JSON Schema and validates returned fields. The routed model name is returned for transparency. OpenRouter free-model availability and limits can vary.
-
-The feature is optional. Manual scanning, review, planning, cleanup, timeline, receipts and vault operation remain available when the proxy or free-model capacity is unavailable.
-
-## Storage Assistant authority boundary
-
-Remote output is advisory. It cannot independently traverse the filesystem, access local paths, add cleanup targets, change safety classes, create a plan, execute cleanup or restore data.
-
-Rust remains authoritative for IDs, measured values, risk classes, action availability and cleanup execution. Unsafe cleanup claims are rejected before display.
-
-See [storage-assistant.md](storage-assistant.md).
-
-## Landing page and proxy hosting
-
-The landing page may request public release metadata from the GitHub API to resolve the newest installer links. It does not receive desktop application data.
-
-The `/api/assistant` route is a serverless proxy for explicit assistant requests. Vercel and OpenRouter may process ordinary request metadata and the bounded fields described above according to their respective policies. No desktop telemetry is sent through this route.
+A site host may process ordinary web request metadata according to the host's own policy. This is separate from the WinReclaim desktop application.
 
 ## Logs and issue reports
 
@@ -96,10 +54,10 @@ Logs and screenshots can reveal private folder names even when the application d
 
 - replace the Windows username;
 - redact drive labels and project names;
-- remove API keys and tokens;
-- do not attach snapshot, receipt or vault files unless specifically sanitized;
+- remove tokens and signing material;
+- do not attach snapshots, receipts, or vault files unless sanitized;
 - inspect screenshot backgrounds and title bars;
-- avoid sharing the updater private key under any circumstances.
+- never share the updater private key.
 
 ## Data retention
 
@@ -107,28 +65,24 @@ Logs and screenshots can reveal private folder names even when the application d
 - vault entries have a limited restore window;
 - receipts remain until removed through Settings or manual deletion;
 - retired local-model files are removed by version 1.2.1 during startup;
-- provider API keys are not persisted by the WinReclaim desktop application.
+- no assistant provider credentials are stored because the production application has no provider integration.
 
 See [data-layout.md](data-layout.md) for exact locations and reset behaviour.
 
 ## Third parties
 
-Optional network features are subject to the policies and terms of their providers:
+The desktop application's only intended online service is GitHub Releases for update metadata and signed installer downloads.
 
-- GitHub for releases and updater artifacts;
-- Vercel for landing-page and proxy hosting;
-- OpenRouter and its routed providers for explicit assistant requests.
-
-WinReclaim is not affiliated with or endorsed by those providers.
+WinReclaim is not affiliated with or endorsed by GitHub, Microsoft, OpenAI, or other named technology providers.
 
 ## Privacy-impacting changes
 
-A contribution that introduces a new network request, telemetry, crash reporting, remote storage or model provider must:
+A contribution that introduces a new network request, telemetry, crash reporting, remote storage, model provider, or credential must:
 
-1. be opt-in unless required for an explicit user action;
+1. be opt-in unless required for a clearly requested operation;
 2. document the exact transmitted fields;
-3. avoid filesystem paths, names and file contents by default;
+3. avoid filesystem paths, names, and file contents by default;
 4. expose failure without blocking local core functionality;
-5. keep provider credentials outside distributed clients;
-6. update this document, the threat model and the changelog;
+5. keep credentials outside distributed clients;
+6. update this document, the threat model, and the changelog;
 7. receive explicit maintainer review.
