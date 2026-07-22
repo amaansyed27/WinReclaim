@@ -28,7 +28,7 @@ openrouter/free
 
 OpenRouter selects an available free model that supports the request parameters, including structured output. The routed model name is returned with the report and shown in the interface.
 
-Free model capacity can vary. Requests may be slower or temporarily rate-limited. Failure never blocks access to the deterministic scan report.
+Free model capacity can vary. The proxy retries once when strict structured output fails, tolerates a bounded JSON object wrapped in Markdown or explanatory text, and validates the result exactly. If routing, capacity, configuration or output still fails, it returns a conservative deterministic summary or safe-now intent default instead of an assistant error. The deterministic scan report is never blocked.
 
 ## Storage summary input
 
@@ -90,7 +90,9 @@ The serverless function at `landing-page/api/assistant.js`:
 - caps input arrays and output tokens;
 - applies a basic per-IP demo rate limit;
 - validates all returned fields before responding;
-- returns bounded error messages;
+- retries malformed or incompatible model output once with a compatibility prompt;
+- falls back to deterministic scan totals and conservative safe-now intent constraints when cloud routing fails;
+- returns bounded error messages for invalid client requests;
 - never forwards arbitrary model IDs, prompts, tools or provider options from the client.
 
 The OpenRouter key should additionally have a low spending limit or guardrail and should be rotated after public judging.

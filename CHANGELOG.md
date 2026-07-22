@@ -11,6 +11,15 @@ All notable user-facing changes to WinReclaim are documented here. The project f
 - Added architecture, command API, data lifecycle, privacy, threat-model, testing, rule-authoring, release, troubleshooting and licensing guidance.
 - Added GitHub issue and pull-request templates.
 
+## [1.2.2] - 2026-07-22
+
+### Fixed
+
+- Retries cloud assistance once with a compatibility prompt when strict structured output is unavailable.
+- Accepts valid JSON wrapped in Markdown fences or short explanatory text, while retaining exact response validation.
+- Returns a conservative deterministic summary or safe-now intent default when OpenRouter is unavailable, rate-limited, misconfigured or returns malformed output.
+- Prevents optional assistant outages from surfacing as 503 or invalid-JSON failures for otherwise valid scan requests.
+
 ## [1.2.1] - 2026-07-22
 
 ### Added
