@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowIcon, ShieldIcon } from "../../components/Icons";
+import { ArrowIcon } from "../../components/Icons";
 import { StorageAssistantPanel } from "../assistant/StorageAssistantPanel";
 import { formatBytes } from "../../lib/format";
 import {
@@ -26,6 +26,16 @@ interface FindingsViewProps {
   onCreatePlan: () => void;
 }
 
+type ReviewTab = "overview" | "recommended" | "optional" | "inspect" | "assistant";
+
+const reviewTabs: Array<{ id: ReviewTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "recommended", label: "Recommended" },
+  { id: "optional", label: "Optional" },
+  { id: "inspect", label: "Inspect" },
+  { id: "assistant", label: "Assistant" }
+];
+
 export function FindingsView({
   report,
   passports,
@@ -39,6 +49,7 @@ export function FindingsView({
   onCreatePlan
 }: FindingsViewProps) {
   const drives = report.drives ?? [];
+  const [activeTab, setActiveTab] = useState<ReviewTab>("overview");
   const [query, setQuery] = useState("");
   const [driveFilter, setDriveFilter] = useState<string>("all");
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -85,12 +96,24 @@ export function FindingsView({
   const reviewOnlyBytes = reviewOnly.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const allRecommendedBytes = allRecommended.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
   const rebuildableBytes = rebuildable.reduce((sum, finding) => sum + finding.estimatedBytes, 0);
-  const visibleCount = recommended.length + optional.length + reviewOnly.length;
 
   const inspectionGroups = useMemo(
     () => groupInspectionFindings(reviewOnly, drives),
     [reviewOnly, drives]
   );
+
+  const tabCounts: Partial<Record<ReviewTab, number>> = {
+    recommended: allRecommended.length,
+    optional: allOptional.length,
+    inspect: allReviewOnly.length
+  };
+
+  const visibleItems =
+    activeTab === "recommended"
+      ? recommended
+      : activeTab === "optional"
+        ? optional
+        : reviewOnly;
 
   function selectFindings(findings: Finding[]) {
     findings.forEach((finding) => {
@@ -100,207 +123,234 @@ export function FindingsView({
 
   function selectRecommended() {
     selectFindings(allRecommended);
+    setActiveTab("recommended");
   }
 
   function selectRebuildable() {
     selectFindings(rebuildable);
+    setActiveTab("optional");
   }
 
   function clearSelection() {
     selectedIds.forEach((id) => onToggle(id));
   }
 
+  const showResultTools = activeTab === "recommended" || activeTab === "optional" || activeTab === "inspect";
+
   return (
-    <section className="page findings-view simple-findings-view">
-      <header className="page-header simple-page-header findings-page-header">
+    <section className="page review-workspace">
+      <header className="page-header review-page-header">
         <div>
           <span className="page-kicker">Step 2 of 3</span>
           <h1>Review your storage</h1>
-          <p>See what is using space, choose verified cleanup actions, and inspect everything else without changing it.</p>
+          <p>Choose verified cleanup actions or inspect what is using space. Nothing changes until you confirm the final plan.</p>
         </div>
-        <div className="report-header-metrics" aria-label="Scan totals">
-          <div>
-            <span>Used</span>
-            <strong>{formatBytes(report.disk.usedBytes)}</strong>
-          </div>
-          <div>
-            <span>Free</span>
-            <strong>{formatBytes(report.disk.freeBytes)}</strong>
-          </div>
-          <div>
-            <span>Locations</span>
-            <strong>{report.findings.length}</strong>
-          </div>
+        <div className="review-header-metrics" aria-label="Scan totals">
+          <div><span>Used</span><strong>{formatBytes(report.disk.usedBytes)}</strong></div>
+          <div><span>Free</span><strong>{formatBytes(report.disk.freeBytes)}</strong></div>
+          <div><span>Found</span><strong>{report.findings.length}</strong></div>
         </div>
       </header>
 
-      <StorageOverview report={report} />
+      <nav className="review-tabs" role="tablist" aria-label="Review sections">
+        {reviewTabs.map((tab) => (
+          <button
+            type="button"
+            role="tab"
+            id={`review-tab-${tab.id}`}
+            aria-controls={`review-panel-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? "is-active" : ""}
+            onClick={() => setActiveTab(tab.id)}
+            key={tab.id}
+          >
+            <span>{tab.label}</span>
+            {tabCounts[tab.id] !== undefined && <b>{tabCounts[tab.id]}</b>}
+          </button>
+        ))}
+      </nav>
 
-      <div className="report-action-grid">
-        <section className="surface cleanup-recommendation">
-          <div className="recommendation-copy">
-            <span className="recommendation-check" aria-hidden="true">✓</span>
-            <div>
-              <span className="surface-label">Recommended cleanup</span>
-              <h2>
-                {allRecommended.length
-                  ? `${formatBytes(allRecommendedBytes)} ready to review`
-                  : "No low-impact cleanup found"}
-              </h2>
-              <p>
-                {allRecommended.length
-                  ? `${allRecommended.length} measured location${allRecommended.length === 1 ? "" : "s"}. Locked, active, or inaccessible files are skipped at cleanup time.`
-                  : "Optional and inspection-only findings are still available below."}
-              </p>
-            </div>
-          </div>
-          <div className="recommendation-actions">
-            <button className="button button-primary" onClick={selectRecommended} disabled={!allRecommended.length}>Use recommendation</button>
-            <button className="button button-secondary" onClick={selectRebuildable} disabled={!rebuildable.length}>
-              Add rebuildable caches · {formatBytes(rebuildableBytes)}
-            </button>
-            <button className="button button-quiet" onClick={clearSelection} disabled={!selectedIds.size}>Clear</button>
-          </div>
-        </section>
-
-        <StorageAssistantPanel report={report} />
-      </div>
-
-      {drives.length > 1 && (
-        <section className="surface drive-filter" aria-label="Filter results by drive">
-          <span>Show findings for</span>
-          <div>
-            <button
-              type="button"
-              className={driveFilter === "all" ? "is-active" : ""}
-              onClick={() => setDriveFilter("all")}
-            >
-              All drives
-            </button>
-            {drives.map((drive) => (
+      {showResultTools && (
+        <div className="review-result-tools">
+          {drives.length > 1 && (
+            <div className="review-drive-filter" aria-label="Filter results by drive">
               <button
                 type="button"
-                key={drive.volumeId}
-                className={driveFilter === drive.root ? "is-active" : ""}
-                onClick={() => setDriveFilter(drive.root)}
-              >
-                {drive.root.replace("\\", "")} {drive.label ? `· ${drive.label}` : ""}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="surface finding-filter-bar" aria-label="Filter scan results">
-        <label htmlFor="finding-search">
-          <span>Search scan results</span>
-          <input
-            id="finding-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, category, owner, or path"
-          />
-        </label>
-        <span>{normalizedQuery || driveFilter !== "all" ? `${visibleCount} of ${report.findings.length} locations` : `${report.findings.length} locations`}</span>
-      </section>
-
-      {aiStatus?.configured && (
-        <IntentPlanner
-          status={aiStatus}
-          loading={intentLoading}
-          summary={intentSummary}
-          selectedBytes={selectedBytes}
-          onInterpret={onInterpretIntent}
-        />
-      )}
-
-      <FindingSection
-        title="Recommended"
-        note="Measured temporary data with the lowest expected impact."
-        items={recommended}
-        bytes={recommendedBytes}
-        passports={passports}
-        selectedIds={selectedIds}
-        onToggle={onToggle}
-      />
-
-      {optional.length > 0 && (
-        <FindingSection
-          title="Optional cleanup"
-          note="Rebuildable, redownloadable, or destructive actions. Review the consequence before selecting."
-          items={optional}
-          bytes={optionalBytes}
-          passports={passports}
-          selectedIds={selectedIds}
-          onToggle={onToggle}
-        />
-      )}
-
-      {reviewOnly.length > 0 && (
-        <details className="surface review-only-folders">
-          <summary>
-            <div>
-              <ShieldIcon />
-              <span>
-                <strong>{reviewOnly.length} protected or inspection-only locations</strong>
-                <small>Reported rows total {formatBytes(reviewOnlyBytes)} and can overlap. Drive totals above are authoritative.</small>
-              </span>
+                className={driveFilter === "all" ? "is-active" : ""}
+                onClick={() => setDriveFilter("all")}
+              >All drives</button>
+              {drives.map((drive) => (
+                <button
+                  type="button"
+                  key={drive.volumeId}
+                  className={driveFilter === drive.root ? "is-active" : ""}
+                  onClick={() => setDriveFilter(drive.root)}
+                >
+                  {drive.root.replace("\\", "")}{drive.label ? ` · ${drive.label}` : ""}
+                </button>
+              ))}
             </div>
-            <span>Show categories</span>
-          </summary>
-          <div className="review-only-content categorized-inspection">
-            {inspectionGroups.map((group) => (
-              <section className="inspection-category" key={`${group.driveRoot}-${group.id}`}>
-                <div className="inspection-category-head">
-                  <div>
-                    <span>{group.driveLabel}</span>
-                    <h3>{group.label}</h3>
-                    <p>{group.description}</p>
-                  </div>
-                  <div>
-                    <span>{group.items.length} location{group.items.length === 1 ? "" : "s"}</span>
-                    <strong>{formatBytes(group.bytes)}</strong>
-                  </div>
+          )}
+          <label className="review-search" htmlFor="finding-search">
+            <span className="sr-only">Search scan results</span>
+            <input
+              id="finding-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search name, category, owner, or path"
+            />
+          </label>
+          <span className="review-result-count">
+            {visibleItems.length} location{visibleItems.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
+
+      <div
+        className={`review-tab-panel review-tab-panel-${activeTab}`}
+        role="tabpanel"
+        id={`review-panel-${activeTab}`}
+        aria-labelledby={`review-tab-${activeTab}`}
+      >
+        {activeTab === "overview" && (
+          <>
+            <StorageOverview report={report} />
+            <section className="review-recommendation">
+              <span className="recommendation-check" aria-hidden="true">✓</span>
+              <div className="review-recommendation-copy">
+                <span className="surface-label">Recommended cleanup</span>
+                <h2>
+                  {allRecommended.length
+                    ? `${formatBytes(allRecommendedBytes)} ready to review`
+                    : "No low-impact cleanup found"}
+                </h2>
+                <p>
+                  {allRecommended.length
+                    ? `${allRecommended.length} measured location${allRecommended.length === 1 ? "" : "s"}. Locked, active, or inaccessible files are skipped.`
+                    : "Optional and inspection-only findings are available in their own tabs."}
+                </p>
+              </div>
+              <div className="review-recommendation-actions">
+                <button className="button button-primary" onClick={selectRecommended} disabled={!allRecommended.length}>Review recommendation</button>
+                <button className="button button-secondary" onClick={selectRebuildable} disabled={!rebuildable.length}>
+                  Add rebuildable · {formatBytes(rebuildableBytes)}
+                </button>
+                <button className="button button-quiet" onClick={clearSelection} disabled={!selectedIds.size}>Clear selection</button>
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeTab === "recommended" && (
+          recommended.length ? (
+            <FindingSection
+              title="Recommended cleanup"
+              note="Measured temporary data with the lowest expected impact."
+              items={recommended}
+              bytes={recommendedBytes}
+              passports={passports}
+              selectedIds={selectedIds}
+              onToggle={onToggle}
+            />
+          ) : (
+            <ReviewEmpty filtered={Boolean(normalizedQuery || driveFilter !== "all")} />
+          )
+        )}
+
+        {activeTab === "optional" && (
+          optional.length ? (
+            <FindingSection
+              title="Optional cleanup"
+              note="Rebuildable, redownloadable, or destructive actions. Review each consequence before selecting."
+              items={optional}
+              bytes={optionalBytes}
+              passports={passports}
+              selectedIds={selectedIds}
+              onToggle={onToggle}
+            />
+          ) : (
+            <ReviewEmpty filtered={Boolean(normalizedQuery || driveFilter !== "all")} />
+          )
+        )}
+
+        {activeTab === "inspect" && (
+          inspectionGroups.length ? (
+            <section className="review-inspection-list">
+              <header className="review-section-heading">
+                <div>
+                  <h2>Protected and inspection-only locations</h2>
+                  <p>These locations are measured for context. WinReclaim will not remove them.</p>
                 </div>
-                <div className="finding-list">
-                  {group.items.map((finding) => (
-                    <FindingRow
-                      finding={{ ...finding, displayName: friendlyFindingName(finding) }}
-                      passport={passports.get(finding.id)}
-                      key={finding.id}
-                      selected={false}
-                      onToggle={onToggle}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+                <div><span>{reviewOnly.length} locations</span><strong>{formatBytes(reviewOnlyBytes)}</strong></div>
+              </header>
+              {inspectionGroups.map((group) => (
+                <section className="inspection-category" key={`${group.driveRoot}-${group.id}`}>
+                  <div className="inspection-category-head">
+                    <div>
+                      <span>{group.driveLabel}</span>
+                      <h3>{group.label}</h3>
+                      <p>{group.description}</p>
+                    </div>
+                    <div>
+                      <span>{group.items.length} location{group.items.length === 1 ? "" : "s"}</span>
+                      <strong>{formatBytes(group.bytes)}</strong>
+                    </div>
+                  </div>
+                  <div className="finding-list">
+                    {group.items.map((finding) => (
+                      <FindingRow
+                        finding={{ ...finding, displayName: friendlyFindingName(finding) }}
+                        passport={passports.get(finding.id)}
+                        key={finding.id}
+                        selected={false}
+                        onToggle={onToggle}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </section>
+          ) : (
+            <ReviewEmpty filtered={Boolean(normalizedQuery || driveFilter !== "all")} />
+          )
+        )}
+
+        {activeTab === "assistant" && (
+          <div className="review-assistant-layout">
+            <StorageAssistantPanel report={report} />
+            {aiStatus?.configured && (
+              <IntentPlanner
+                status={aiStatus}
+                loading={intentLoading}
+                summary={intentSummary}
+                selectedBytes={selectedBytes}
+                onInterpret={onInterpretIntent}
+              />
+            )}
           </div>
-        </details>
-      )}
+        )}
+      </div>
 
-      {(normalizedQuery || driveFilter !== "all") && visibleCount === 0 && (
-        <section className="surface simple-empty-card">
-          <strong>No matching locations</strong>
-          <span>Try another drive, folder name, tool name, category, or part of a path.</span>
-        </section>
-      )}
-
-      <footer className="sticky-action-bar simple-sticky-action-bar">
+      <footer className="review-action-footer">
         <button className="button button-secondary" onClick={onBack}>Back</button>
         <div className="selection-summary">
           <span>{selectedIds.size ? `${selectedIds.size} selected` : "Nothing selected"}</span>
           <strong>{formatBytes(selectedBytes)}</strong>
         </div>
-        <button
-          className="button button-primary"
-          onClick={onCreatePlan}
-          disabled={!selectedIds.size}
-        >
+        <button className="button button-primary" onClick={onCreatePlan} disabled={!selectedIds.size}>
           Review cleanup <ArrowIcon />
         </button>
       </footer>
+    </section>
+  );
+}
+
+function ReviewEmpty({ filtered }: { filtered: boolean }) {
+  return (
+    <section className="review-empty-state">
+      <strong>{filtered ? "No matching locations" : "Nothing in this section"}</strong>
+      <span>{filtered ? "Try another drive or search term." : "The scan did not find any items for this tab."}</span>
     </section>
   );
 }
@@ -323,14 +373,14 @@ function StorageOverview({ report }: { report: ScanReport }) {
   const visibleGroups = grouped.slice(0, 6);
 
   return (
-    <section className="surface storage-overview">
-      <div className="storage-overview-head">
+    <section className="storage-overview">
+      <header className="review-section-heading">
         <div>
           <span className="surface-label">Storage map</span>
           <h2>Drive usage and largest categories</h2>
-          <p>Volume totals are authoritative. Category rows are reported locations and may overlap.</p>
+          <p>Volume totals are authoritative. Category rows may overlap.</p>
         </div>
-      </div>
+      </header>
 
       <div className="report-overview-layout">
         <div className="overview-drive-grid">
@@ -438,20 +488,12 @@ function FindingSection({
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
 }) {
-  if (!items.length) return null;
-
   return (
-    <section className="finding-group simple-finding-group">
-      <div className="finding-group-head">
-        <div>
-          <h2>{title}</h2>
-          <p>{note}</p>
-        </div>
-        <div className="group-summary">
-          <span>{items.length} item{items.length === 1 ? "" : "s"}</span>
-          <strong>{formatBytes(bytes)}</strong>
-        </div>
-      </div>
+    <section className="review-finding-table">
+      <header className="review-section-heading">
+        <div><h2>{title}</h2><p>{note}</p></div>
+        <div><span>{items.length} item{items.length === 1 ? "" : "s"}</span><strong>{formatBytes(bytes)}</strong></div>
+      </header>
       <div className="finding-list">
         {items.map((finding) => (
           <FindingRow
