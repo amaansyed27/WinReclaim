@@ -199,6 +199,10 @@ if (/sk-or-v1-[A-Za-z0-9_-]+/.test(proxy)) {
   violations.push("landing-page/api/assistant.js: OpenRouter key was committed to source");
 }
 
+requireText("src-tauri/src/main.rs", [
+  '#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]'
+], "packaged Windows GUI subsystem");
+
 const cargoManifest = read("src-tauri/Cargo.toml");
 if (cargoManifest.includes("llama-cpp-2") || cargoManifest.includes('zip = { version = "2"')) {
   violations.push("src-tauri/Cargo.toml: retired local-model runtime dependency remains");
