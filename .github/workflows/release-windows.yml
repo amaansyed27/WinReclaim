@@ -9,7 +9,7 @@ on:
       version:
         description: Semantic version to publish, without the v prefix
         required: true
-        default: "1.2.2"
+        default: "1.2.3"
         type: string
       release_notes:
         description: Optional release notes shown on GitHub
@@ -146,7 +146,7 @@ jobs:
             - **NSIS setup (.exe):** recommended for most Windows users
             - **MSI installer:** suitable for managed or administrative deployment
 
-            This patch hardens the optional Storage Assistant with bounded retries, tolerant JSON extraction and conservative deterministic fallbacks when free-model capacity or structured output is unavailable.
+            This patch builds WinReclaim as a Windows GUI application so installed and updated releases no longer open a stray Windows Terminal or console window.
 
             WinReclaim remains local-first for scanning, planning, cleanup, history, receipts and restore. Cloud assistance is optional and advisory.
           releaseDraft: false

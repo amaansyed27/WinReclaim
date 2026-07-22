@@ -11,6 +11,13 @@ All notable user-facing changes to WinReclaim are documented here. The project f
 - Added architecture, command API, data lifecycle, privacy, threat-model, testing, rule-authoring, release, troubleshooting and licensing guidance.
 - Added GitHub issue and pull-request templates.
 
+## [1.2.3] - 2026-07-22
+
+### Fixed
+
+- Builds the packaged Windows executable with the GUI subsystem so launching WinReclaim no longer opens a stray Windows Terminal or console window.
+- Keeps development builds attached to PowerShell so Rust and Tauri diagnostics remain visible during local development.
+
 ## [1.2.2] - 2026-07-22
 
 ### Fixed

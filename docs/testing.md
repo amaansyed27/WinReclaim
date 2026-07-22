@@ -120,6 +120,7 @@ See [storage-assistant-evaluation.md](storage-assistant-evaluation.md).
 | Install | Clean NSIS install as a standard user |
 | Install | MSI installation and uninstall |
 | Launch | First launch with no app data |
+| Launch | Packaged NSIS/MSI build opens only the WinReclaim GUI, with no Windows Terminal or console window |
 | Migration | Retired local assistant directory is removed safely |
 | Scan | Quick system-drive scan |
 | Scan | Multi-drive scan and inspection-only removable/network drive |
