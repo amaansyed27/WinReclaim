@@ -1,6 +1,6 @@
 [package]
 name = "winreclaim"
-version = "1.2.2"
+version = "1.2.3"
 description = "Local-first Windows storage intelligence"
 authors = ["Amaan Syed"]
 edition = "2021"
