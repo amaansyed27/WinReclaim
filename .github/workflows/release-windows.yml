@@ -9,7 +9,7 @@ on:
       version:
         description: Semantic version to publish, without the v prefix
         required: true
-        default: "1.2.3"
+        default: "1.2.5"
         type: string
       release_notes:
         description: Optional release notes shown on GitHub
@@ -88,11 +88,22 @@ jobs:
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Verify updater signing secret
+      - name: Verify updater signing configuration
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
             throw "TAURI_SIGNING_PRIVATE_KEY is missing. Add it under repository Actions secrets before publishing."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is missing for the password-protected WinReclaim updater key."
+          }
+
+          $expectedPublicKey = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFRjY1QTI5OEZDNTNFRkQKUldUOVBzV1BLVnIySG12VDJwb1RDMXBJZk8weVcrN3l6UFJ1a0NNMWZ2ZXY0WjFqZEJFRnRoL3IK"
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+
+          if ($config.plugins.updater.pubkey -ne $expectedPublicKey) {
+            throw "The updater public key in tauri.conf.json is not the approved v1.2.5 signing key."
           }
 
       - name: Install frontend dependencies
@@ -146,7 +157,7 @@ jobs:
             - **NSIS setup (.exe):** recommended for most Windows users
             - **MSI installer:** suitable for managed or administrative deployment
 
-            This patch builds WinReclaim as a Windows GUI application so installed and updated releases no longer open a stray Windows Terminal or console window.
+            This release includes the tabbed storage Review redesign and establishes the replacement updater signing key. Install v1.2.5 manually once if an older build reports a signature mismatch.
 
             WinReclaim remains local-first for scanning, planning, cleanup, history, receipts and restore. Cloud assistance is optional and advisory.
           releaseDraft: false
