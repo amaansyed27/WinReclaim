@@ -1,4 +1,4 @@
-use super::openrouter::ModelConstraints;
+use super::rules::IntentConstraints;
 use crate::domain::{Finding, IntentSuggestion, RiskClass};
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
@@ -9,7 +9,7 @@ const MAX_SUMMARY_CHARS: usize = 280;
 pub(crate) fn build_suggestion(
     model: &str,
     candidates: &[&Finding],
-    constraints: ModelConstraints,
+    constraints: IntentConstraints,
 ) -> Result<IntentSuggestion> {
     let allowed_risk_classes = validate_risk_classes(&constraints.allowed_risk_classes)?;
     let allowed = allowed_risk_classes.iter().copied().collect::<HashSet<_>>();
@@ -180,9 +180,9 @@ mod tests {
         let candidates = vec![&safe, &rebuild, &review];
 
         let suggestion = build_suggestion(
-            "test-model",
+            "test-engine",
             &candidates,
-            ModelConstraints {
+            IntentConstraints {
                 target_reclaim_bytes: Some(100),
                 allowed_risk_classes: vec![
                     "safe_now".to_string(),
@@ -205,9 +205,9 @@ mod tests {
         let safe = finding("safe", 40, RiskClass::SafeNow);
         let candidates = vec![&safe];
         let result = build_suggestion(
-            "test-model",
+            "test-engine",
             &candidates,
-            ModelConstraints {
+            IntentConstraints {
                 target_reclaim_bytes: None,
                 allowed_risk_classes: vec!["safe_now".to_string()],
                 excluded_candidate_ids: vec![Uuid::new_v4()],
@@ -223,9 +223,9 @@ mod tests {
         let safe = finding("safe", 40, RiskClass::SafeNow);
         let candidates = vec![&safe];
         let result = build_suggestion(
-            "test-model",
+            "test-engine",
             &candidates,
-            ModelConstraints {
+            IntentConstraints {
                 target_reclaim_bytes: None,
                 allowed_risk_classes: vec![],
                 excluded_candidate_ids: vec![],
