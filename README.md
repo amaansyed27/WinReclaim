@@ -205,7 +205,7 @@ Storage summaries send aggregate totals and category/risk/action counts. Reclaim
 
 The proxy fixes the model to `openrouter/free`, requires structured JSON output, validates request and response shapes and applies a demo rate limit. Rust independently validates returned IDs and safety classes. Remote output cannot create cleanup targets, change risk, create plans, run commands or execute deletion.
 
-Free model availability can vary. All scanning, review, planning, cleanup, history, receipts and restore features remain available when the cloud assistant is unavailable.
+Free model availability can vary. The proxy retries incompatible output once, accepts bounded JSON-wrapped responses, and returns a conservative deterministic fallback when no compatible model is available. Scanning, review, planning, cleanup, history, receipts and restore remain local and unaffected.
 
 Read [Storage Assistant](docs/storage-assistant.md) and [Privacy](docs/privacy.md).
 
