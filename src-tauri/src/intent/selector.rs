@@ -1,4 +1,4 @@
-use super::openai::ModelConstraints;
+use super::openrouter::ModelConstraints;
 use crate::domain::{Finding, IntentSuggestion, RiskClass};
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
@@ -84,7 +84,9 @@ fn validate_risk_classes(values: &[String]) -> Result<Vec<RiskClass>> {
     }
 
     if parsed.is_empty() {
-        return Err(anyhow!("OpenAI returned no allowed cleanup risk classes"));
+        return Err(anyhow!(
+            "The routed model returned no allowed cleanup risk classes"
+        ));
     }
 
     Ok(parsed)
@@ -94,7 +96,9 @@ fn validate_exclusions(values: &[Uuid], candidate_ids: &HashSet<Uuid>) -> Result
     let mut excluded = HashSet::new();
     for value in values {
         if !candidate_ids.contains(value) {
-            return Err(anyhow!("OpenAI referenced an unknown cleanup candidate"));
+            return Err(anyhow!(
+                "The routed model referenced an unknown cleanup candidate"
+            ));
         }
         excluded.insert(*value);
     }
@@ -104,10 +108,12 @@ fn validate_exclusions(values: &[Uuid], candidate_ids: &HashSet<Uuid>) -> Result
 fn validate_summary(value: &str) -> Result<String> {
     let summary = value.trim();
     if summary.is_empty() {
-        return Err(anyhow!("OpenAI returned an empty explanation"));
+        return Err(anyhow!("The routed model returned an empty explanation"));
     }
     if summary.chars().count() > MAX_SUMMARY_CHARS {
-        return Err(anyhow!("OpenAI returned an unexpectedly long explanation"));
+        return Err(anyhow!(
+            "The routed model returned an unexpectedly long explanation"
+        ));
     }
     Ok(summary.to_string())
 }
@@ -117,7 +123,9 @@ fn parse_risk(value: &str) -> Result<RiskClass> {
         "safe_now" => Ok(RiskClass::SafeNow),
         "rebuild_or_redownload" => Ok(RiskClass::RebuildOrRedownload),
         "review_first" => Ok(RiskClass::ReviewFirst),
-        _ => Err(anyhow!("OpenAI returned an unsupported risk class")),
+        _ => Err(anyhow!(
+            "The routed model returned an unsupported risk class"
+        )),
     }
 }
 

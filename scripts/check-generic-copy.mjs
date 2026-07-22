@@ -1,10 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+
+const violations = [];
+const read = (path) => readFileSync(path, "utf8");
+const requireText = (path, values, label) => {
+  const source = read(path);
+  for (const value of values) {
+    if (!source.includes(value)) violations.push(`${path}: missing ${label} "${value}"`);
+  }
+  return source;
+};
 
 const genericUiFiles = [
   "src/App.tsx",
   "src/components/Sidebar.tsx",
   "src/features/assistant/StorageAssistantPanel.tsx",
-  "src/features/assistant/StorageAssistantSettings.tsx",
   "src/features/findings/FindingsView.tsx",
   "src/features/findings/FindingRow.tsx",
   "src/features/findings/IntentPlanner.tsx",
@@ -28,7 +37,6 @@ const forbiddenMachineExamples = [
   /\bken(?:-probe|-research)?\b/i,
   /\blive-runtime\b/i
 ];
-
 const forbiddenRuntimeClaims = [
   /confidenceScore/,
   /estimatedRecoveryMinutes/,
@@ -38,10 +46,8 @@ const forbiddenRuntimeClaims = [
   /kept for 7 days/i
 ];
 
-const violations = [];
-
 for (const file of genericUiFiles) {
-  const source = readFileSync(file, "utf8");
+  const source = read(file);
   for (const pattern of forbiddenMachineExamples) {
     const match = source.match(pattern);
     if (match) violations.push(`${file}: machine-specific example "${match[0]}"`);
@@ -52,26 +58,15 @@ for (const file of genericUiFiles) {
   }
 }
 
-const frontendTypes = readFileSync("src/types.ts", "utf8");
+const frontendTypes = read("src/types.ts");
 for (const field of ["confidenceScore", "estimatedRecoveryMinutes", "protectedSummary", "reclaimableGrowthBytes"]) {
   if (frontendTypes.includes(field)) violations.push(`src/types.ts: obsolete field "${field}"`);
 }
-for (const action of ["prefetch", "generic_directory"]) {
-  if (!frontendTypes.includes(`\"${action}\"`)) {
-    violations.push(`src/types.ts: missing action kind "${action}"`);
-  }
-}
-for (const required of ["DriveInfo", "DriveKind", "roots: string[]", "drives: DriveInfo[]"]) {
-  if (!frontendTypes.includes(required)) {
-    violations.push(`src/types.ts: missing multi-drive type "${required}"`);
-  }
+for (const required of ["\"prefetch\"", "\"generic_directory\"", "DriveInfo", "DriveKind", "roots: string[]", "drives: DriveInfo[]"]) {
+  if (!frontendTypes.includes(required)) violations.push(`src/types.ts: missing contract "${required}"`);
 }
 
-const profileBackend = readFileSync("src-tauri/src/scanner/profile.rs", "utf8");
-if (profileBackend.includes("eligible_temp_size") || profileBackend.includes("temp_minimum_age")) {
-  violations.push("src-tauri/src/scanner/profile.rs: Temp is still age-filtered instead of measuring the full root");
-}
-for (const required of [
+const profileBackend = requireText("src-tauri/src/scanner/profile.rs", [
   "ActionKind::Prefetch",
   "ActionKind::GenericDirectory",
   "project_output_descriptor",
@@ -79,150 +74,142 @@ for (const required of [
   "selected_drive_info",
   "aggregate_disk",
   "apply_drive_safety"
-]) {
-  if (!profileBackend.includes(required)) {
-    violations.push(`src-tauri/src/scanner/profile.rs: missing scan safeguard "${required}"`);
-  }
+], "scan safeguard");
+if (profileBackend.includes("eligible_temp_size") || profileBackend.includes("temp_minimum_age")) {
+  violations.push("src-tauri/src/scanner/profile.rs: Temp is still age-filtered");
 }
 
-const platformBackend = readFileSync("src-tauri/src/platform/windows/filesystem.rs", "utf8");
-for (const required of ["list_drives", "GetLogicalDrives", "GetVolumeInformationW", "volume_id", "same_drive"]) {
-  if (!platformBackend.includes(required)) {
-    violations.push(`src-tauri/src/platform/windows/filesystem.rs: missing volume discovery "${required}"`);
-  }
-}
+requireText("src-tauri/src/platform/windows/filesystem.rs", [
+  "list_drives",
+  "GetLogicalDrives",
+  "GetVolumeInformationW",
+  "volume_id",
+  "same_drive"
+], "volume discovery");
 
-const filesystemBackend = readFileSync("src-tauri/src/actions/filesystem.rs", "utf8");
-for (const required of ["clean_user_temp", "clean_prefetch", "clean_generic_directory", "is_verified_project_output", "is_safe_dynamic_cache"]) {
-  if (!filesystemBackend.includes(required)) {
-    violations.push(`src-tauri/src/actions/filesystem.rs: missing cleanup validation "${required}"`);
-  }
-}
+const filesystemBackend = requireText("src-tauri/src/actions/filesystem.rs", [
+  "clean_user_temp",
+  "clean_prefetch",
+  "clean_generic_directory",
+  "is_verified_project_output",
+  "is_safe_dynamic_cache"
+], "cleanup validation");
 if (filesystemBackend.includes("temp_minimum_age")) {
   violations.push("src-tauri/src/actions/filesystem.rs: Temp cleanup is still age-filtered");
 }
 
-const discoveryBackend = readFileSync("src-tauri/src/scanner/discovery.rs", "utf8");
-for (const required of ["dynamic.portable_cache", "is_portable_cache_name", "ActionKind::GenericDirectory"]) {
-  if (!discoveryBackend.includes(required)) {
-    violations.push(`src-tauri/src/scanner/discovery.rs: missing portable cache behavior "${required}"`);
-  }
-}
+requireText("src-tauri/src/scanner/discovery.rs", [
+  "dynamic.portable_cache",
+  "is_portable_cache_name",
+  "ActionKind::GenericDirectory"
+], "portable cache safeguard");
+requireText("src-tauri/src/insights/mod.rs", [
+  "scope_fingerprint",
+  "compared_with_at",
+  "total_growth_bytes: None"
+], "history safeguard");
+requireText("src-tauri/src/policy.rs", [
+  "volume_id",
+  "file_system",
+  "total_bytes",
+  "normalized_roots.sort",
+  "volumes.sort"
+], "scope identity safeguard");
 
-const timelineBackend = readFileSync("src-tauri/src/insights/mod.rs", "utf8");
-for (const required of ["scope_fingerprint", "compared_with_at", "total_growth_bytes: None"]) {
-  if (!timelineBackend.includes(required)) {
-    violations.push(`src-tauri/src/insights/mod.rs: missing history safeguard "${required}"`);
-  }
-}
-
-const policyBackend = readFileSync("src-tauri/src/policy.rs", "utf8");
-for (const required of ["volume_id", "file_system", "total_bytes", "normalized_roots.sort", "volumes.sort"]) {
-  if (!policyBackend.includes(required)) {
-    violations.push(`src-tauri/src/policy.rs: scan scope is not keyed by stable volume identity "${required}"`);
-  }
-}
-
-const appDataBackend = readFileSync("src-tauri/src/app_data.rs", "utf8");
-for (const required of ["DATA_GENERATION", "clear_scan_history", "clear_cleanup_records", "include_restore_files"]) {
-  if (!appDataBackend.includes(required)) {
-    violations.push(`src-tauri/src/app_data.rs: missing reset safeguard "${required}"`);
-  }
-}
+const appDataBackend = requireText("src-tauri/src/app_data.rs", [
+  "DATA_GENERATION",
+  "clear_scan_history",
+  "clear_cleanup_records",
+  "include_restore_files",
+  "remove_retired_local_assistant",
+  "storage-assistant"
+], "migration/reset safeguard");
 if (!appDataBackend.includes("if !request.include_restore_files")) {
-  violations.push("src-tauri/src/app_data.rs: factory reset no longer preserves Restore files by default");
+  violations.push("src-tauri/src/app_data.rs: reset no longer preserves Restore files by default");
 }
-if (!appDataBackend.includes('name == "models"')) {
-  violations.push("src-tauri/src/app_data.rs: application reset no longer preserves the optional model");
+if (appDataBackend.includes('name == "models"')) {
+  violations.push("src-tauri/src/app_data.rs: retired local model directory is still preserved");
 }
 
-const commandBackend = readFileSync("src-tauri/src/commands/mod.rs", "utf8");
-for (const required of [
+requireText("src-tauri/src/commands/mod.rs", [
   "get_app_data_summary",
   "clear_scan_history",
   "clear_cleanup_records",
   "reset_app_data",
   "list_storage_drives",
   "combined_free_bytes"
+], "command");
+requireText("src/features/scan/ScanView.tsx", [
+  "listStorageDrives",
+  "selectedRoots",
+  "DrivePicker",
+  "Inspection only"
+], "drive-selection behavior");
+requireText("src/features/findings/FindingsView.tsx", [
+  "StorageOverview",
+  "groupInspectionFindings",
+  "driveFilter",
+  "storageGroups",
+  "StorageAssistantPanel"
+], "report behavior");
+
+for (const retired of [
+  "src-tauri/src/assistant/download.rs",
+  "src-tauri/src/assistant/inference.rs",
+  "src-tauri/src/assistant/prompt.rs",
+  "src-tauri/src/intent/openai.rs",
+  "src/features/assistant/StorageAssistantSettings.tsx"
 ]) {
-  if (!commandBackend.includes(required)) {
-    violations.push(`src-tauri/src/commands/mod.rs: missing command "${required}"`);
-  }
+  if (existsSync(retired)) violations.push(`${retired}: retired local/direct-provider implementation still exists`);
 }
 
-const scanView = readFileSync("src/features/scan/ScanView.tsx", "utf8");
-for (const required of ["listStorageDrives", "selectedRoots", "DrivePicker", "Inspection only"]) {
-  if (!scanView.includes(required)) {
-    violations.push(`src/features/scan/ScanView.tsx: missing drive-selection behavior "${required}"`);
-  }
-}
-
-const findingsView = readFileSync("src/features/findings/FindingsView.tsx", "utf8");
-for (const required of ["StorageOverview", "groupInspectionFindings", "driveFilter", "storageGroups", "StorageAssistantPanel"]) {
-  if (!findingsView.includes(required)) {
-    violations.push(`src/features/findings/FindingsView.tsx: missing report behavior "${required}"`);
-  }
-}
-
-const assistantBackend = readFileSync("src-tauri/src/assistant/mod.rs", "utf8");
-for (const required of [
-  "Qwen3.5-2B",
-  "Q4_K_M",
-  "MODEL_SHA256",
-  "RUNTIME_TAG",
-  "RUNTIME_RELEASE_API",
-  "runtime_path",
-  "pub fn analyze"
-]) {
-  if (!assistantBackend.includes(required)) {
-    violations.push(`src-tauri/src/assistant/mod.rs: missing local assistant contract "${required}"`);
-  }
-}
-
-const assistantDownload = readFileSync("src-tauri/src/assistant/download.rs", "utf8");
-for (const required of ["GithubRelease", "runtime_sha256", "ZipArchive", "enclosed_name", "download_verified"]) {
-  if (!assistantDownload.includes(required)) {
-    violations.push(`src-tauri/src/assistant/download.rs: missing sidecar verification "${required}"`);
-  }
-}
-
-const assistantInference = readFileSync("src-tauri/src/assistant/inference.rs", "utf8");
-for (const required of [
-  "Command::new",
-  "--single-turn",
-  "advisory_only: true",
+requireText("src-tauri/src/assistant/mod.rs", [
+  "openrouter/free",
+  "cloud::request",
+  "StorageSummaryPayload",
   "contains_cleanup_claim",
-  "finding_ids.contains",
-  "MAX_ANNOTATIONS"
-]) {
-  if (!assistantInference.includes(required)) {
-    violations.push(`src-tauri/src/assistant/inference.rs: missing output safeguard "${required}"`);
-  }
-}
-if (assistantInference.includes("llama_cpp_2")) {
-  violations.push("src-tauri/src/assistant/inference.rs: embedded llama.cpp bindings were reintroduced");
+  "advisory_only: true",
+  "Paths, usernames, folder names, project names and file contents stay on this PC"
+], "cloud assistant safeguard");
+requireText("src-tauri/src/cloud.rs", [
+  "https://winreclaim.vercel.app/api/assistant",
+  "X-WinReclaim-Client",
+  "WINRECLAIM_ASSISTANT_URL",
+  "Duration::from_secs(60)"
+], "cloud transport contract");
+requireText("src-tauri/src/intent/openrouter.rs", [
+  "openrouter/free",
+  "cloud::request",
+  "candidate_id",
+  "risk_class",
+  "paths, usernames, folder names, project names and file contents stay local"
+], "intent privacy contract");
+
+const proxy = requireText("landing-page/api/assistant.js", [
+  "OPENROUTER_API_KEY",
+  'const MODEL = "openrouter/free"',
+  "response_format",
+  "require_parameters: true",
+  "RATE_LIMIT",
+  "x-winreclaim-client",
+  "Never claim anything is safe to delete or remove",
+  "Anonymized cleanup candidates"
+], "proxy restriction");
+if (/sk-or-v1-[A-Za-z0-9_-]+/.test(proxy)) {
+  violations.push("landing-page/api/assistant.js: OpenRouter key was committed to source");
 }
 
-const cargoManifest = readFileSync("src-tauri/Cargo.toml", "utf8");
-if (cargoManifest.includes("llama-cpp-2")) {
-  violations.push("src-tauri/Cargo.toml: embedded llama.cpp dependency was reintroduced");
-}
-if (!cargoManifest.includes('zip = { version = "2"')) {
-  violations.push("src-tauri/Cargo.toml: pure-Rust sidecar archive extraction dependency is missing");
+const cargoManifest = read("src-tauri/Cargo.toml");
+if (cargoManifest.includes("llama-cpp-2") || cargoManifest.includes('zip = { version = "2"')) {
+  violations.push("src-tauri/Cargo.toml: retired local-model runtime dependency remains");
 }
 
-const assistantPrompt = readFileSync("src-tauri/src/assistant/prompt.rs", "utf8");
-for (const required of ["untrusted data", "Never say a folder is safe to delete", "Never change or reinterpret risk_class"]) {
-  if (!assistantPrompt.includes(required)) {
-    violations.push(`src-tauri/src/assistant/prompt.rs: missing authority boundary "${required}"`);
-  }
-}
-
-const appLib = readFileSync("src-tauri/src/lib.rs", "utf8");
-for (const command of ["get_storage_assistant_status", "install_storage_assistant", "uninstall_storage_assistant", "analyze_storage_report"]) {
-  if (!appLib.includes(command)) {
-    violations.push(`src-tauri/src/lib.rs: missing assistant command "${command}"`);
-  }
+const appLib = requireText("src-tauri/src/lib.rs", [
+  "get_storage_assistant_status",
+  "analyze_storage_report"
+], "assistant command");
+for (const retiredCommand of ["install_storage_assistant", "uninstall_storage_assistant"]) {
+  if (appLib.includes(retiredCommand)) violations.push(`src-tauri/src/lib.rs: retired command remains "${retiredCommand}"`);
 }
 
 if (violations.length) {

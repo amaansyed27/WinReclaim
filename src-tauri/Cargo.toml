@@ -1,6 +1,6 @@
 [package]
 name = "winreclaim"
-version = "1.1.0"
+version = "1.2.0"
 description = "Local-first Windows storage intelligence"
 authors = ["Amaan Syed"]
 edition = "2021"
@@ -28,7 +28,6 @@ tauri-plugin-updater = "2.10.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Win32_System_WindowsProgramming"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [profile.release]
 panic = "abort"

@@ -1,12 +1,15 @@
 name: Release Windows
 
 on:
+  push:
+    branches:
+      - "release/*"
   workflow_dispatch:
     inputs:
       version:
         description: Semantic version to publish, without the v prefix
         required: true
-        default: "1.1.0"
+        default: "1.2.1"
         type: string
       release_notes:
         description: Optional release notes shown on GitHub
@@ -59,10 +62,19 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: Validate requested version
+      - name: Resolve and validate release version
         shell: pwsh
         run: |
-          $version = "${{ inputs.version }}".Trim().TrimStart("v")
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim().TrimStart("v")
+          } else {
+            $releaseRef = "${{ github.ref_name }}"
+            if (-not $releaseRef.StartsWith("release/")) {
+              throw "Automated releases must be triggered from a release/<version> branch."
+            }
+            $version = $releaseRef.Substring("release/".Length).Trim().TrimStart("v")
+          }
+
           if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
             throw "Version must be valid semantic version text, for example 1.2.3 or 1.2.3-beta.1"
           }
@@ -134,8 +146,10 @@ jobs:
             - **NSIS setup (.exe):** recommended for most Windows users
             - **MSI installer:** suitable for managed or administrative deployment
 
-            WinReclaim is local-first. Scans, snapshots, cleanup plans, vault data and receipts remain on the device.
+            This patch refreshes the storage review interface, replaces the retired local model with privacy-bounded OpenRouter free-model assistance, and automatically removes old Storage Assistant model files.
+
+            WinReclaim remains local-first for scanning, planning, cleanup, history, receipts and restore. Cloud assistance is optional and advisory.
           releaseDraft: false
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
           updaterJsonPreferNsis: true
           retryAttempts: 3

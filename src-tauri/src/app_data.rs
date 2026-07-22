@@ -34,6 +34,9 @@ pub struct ResetAppRequest {
 pub fn initialize() -> Result<()> {
     let root = app_root();
     fs::create_dir_all(&root)?;
+
+    remove_retired_local_assistant(&root);
+
     let generation_path = root.join(DATA_GENERATION_FILE);
     let current = fs::read_to_string(&generation_path).unwrap_or_default();
 
@@ -88,7 +91,7 @@ pub fn reset(request: &ResetAppRequest) -> Result<AppDataMutation> {
     for entry in fs::read_dir(&root)? {
         let entry = entry?;
         let name = entry.file_name();
-        if name == DATA_GENERATION_FILE || name == "models" {
+        if name == DATA_GENERATION_FILE {
             continue;
         }
         if !request.include_restore_files && name == "vault" {
@@ -118,6 +121,20 @@ pub fn receipt_root() -> PathBuf {
 
 pub fn vault_root() -> PathBuf {
     app_root().join("vault")
+}
+
+fn remove_retired_local_assistant(root: &Path) {
+    let models_root = root.join("models");
+    let legacy_assistant = models_root.join("storage-assistant");
+    let _ = remove_owned_path(&legacy_assistant);
+
+    let models_is_empty = models_root
+        .read_dir()
+        .map(|mut entries| entries.next().is_none())
+        .unwrap_or(false);
+    if models_is_empty {
+        let _ = fs::remove_dir(&models_root);
+    }
 }
 
 fn clear_owned_directory(path: &Path, include_restore_files: bool) -> Result<AppDataMutation> {
