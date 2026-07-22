@@ -58,7 +58,7 @@ npm run tauri dev
 
 ### Two windows or a console window appear
 
-Development builds can show a console because they are started from PowerShell. The packaged GUI release should not open a local-model sidecar or second console. If a second WinReclaim window appears, inspect `tauri.conf.json` and duplicate window labels.
+Development builds can show a console because they are started from PowerShell. Packaged release builds use the Windows GUI subsystem and must not open Windows Terminal or a second console. If a packaged build does, verify that `src-tauri/src/main.rs` retains the release-only `windows_subsystem = "windows"` attribute. If a second webview appears instead, inspect `tauri.conf.json` and duplicate window labels.
 
 ### Blank window
 
