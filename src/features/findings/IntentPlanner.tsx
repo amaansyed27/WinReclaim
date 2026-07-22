@@ -34,7 +34,7 @@ export function IntentPlanner({
     <details className="intent-planner simple-intent-planner">
       <summary>
         <span>Need help choosing?</span>
-        <small>Describe what you want to keep or clean</small>
+        <small>Use local rules to describe what to keep or clean</small>
       </summary>
       <div className="simple-intent-content">
         <form onSubmit={submit}>
@@ -46,7 +46,7 @@ export function IntentPlanner({
               onChange={(event) => setPrompt(event.target.value)}
               maxLength={1000}
               disabled={loading}
-              placeholder="Free some space, but keep downloads and work folders"
+              placeholder="Free 10 GB from safe items and rebuildable caches"
             />
             <button
               className="button button-secondary"
@@ -59,7 +59,7 @@ export function IntentPlanner({
         </form>
         {summary && <p className="intent-summary">{summary}</p>}
         <p className="intent-privacy">
-          Paths, usernames, folder names and file contents stay local. Routed by {status?.model}. Currently selected: {formatBytes(selectedBytes)}.
+          Interpreted offline by {status?.model}. No prompt or scan data leaves this PC. Currently selected: {formatBytes(selectedBytes)}.
         </p>
       </div>
     </details>
