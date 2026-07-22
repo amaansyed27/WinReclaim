@@ -1,10 +1,10 @@
-mod openrouter;
+mod rules;
 mod selector;
 
 use crate::domain::{Finding, IntentRequest, IntentSuggestion, RiskClass, ScanReport};
 use anyhow::{anyhow, Result};
 
-pub use openrouter::ai_status;
+pub use rules::status as ai_status;
 
 const MAX_PROMPT_CHARS: usize = 1_000;
 
@@ -37,8 +37,8 @@ pub fn interpret_intent(report: &ScanReport, request: IntentRequest) -> Result<I
         ));
     }
 
-    let (model, constraints) = openrouter::request_constraints(prompt, &candidates)?;
-    selector::build_suggestion(&model, &candidates, constraints)
+    let (engine, constraints) = rules::build_constraints(prompt, &candidates)?;
+    selector::build_suggestion(&engine, &candidates, constraints)
 }
 
 fn is_executable_candidate(finding: &&Finding) -> bool {
