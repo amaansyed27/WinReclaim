@@ -200,7 +200,8 @@ if (/sk-or-v1-[A-Za-z0-9_-]+/.test(proxy)) {
 }
 
 requireText("src-tauri/src/main.rs", [
-  '#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]'
+  "all(not(debug_assertions), target_os = \"windows\")",
+  "windows_subsystem = \"windows\""
 ], "packaged Windows GUI subsystem");
 
 const cargoManifest = read("src-tauri/Cargo.toml");
