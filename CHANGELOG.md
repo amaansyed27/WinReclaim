@@ -11,6 +11,20 @@ All notable user-facing changes to WinReclaim are documented here. The project f
 - Added architecture, command API, data lifecycle, privacy, threat-model, testing, rule-authoring, release, troubleshooting and licensing guidance.
 - Added GitHub issue and pull-request templates.
 
+## [1.2.5] - 2026-07-22
+
+### Security
+
+- Replaced the updater public key after the previous private signing key was lost.
+- Establishes a new signed-update trust line; existing installations must install 1.2.5 manually once before automatic updates resume.
+
+## [1.2.4] - 2026-07-22
+
+### Changed
+
+- Redesigned storage Review as a focused tabbed workspace with Overview, Recommended, Optional, Inspect and Assistant sections.
+- Flattened nested panels into desktop-style tabs, section dividers and result rows while preserving selection, filtering and cleanup planning.
+
 ## [1.2.3] - 2026-07-22
 
 ### Fixed
