@@ -1,147 +1,101 @@
-# WinReclaim Storage Assistant
+# WinReclaim Storage Brief and Local Intent Rules
 
-The Storage Assistant is an optional cloud explanation layer for a completed deterministic scan. It uses OpenRouter's Free Models Router through the WinReclaim server-side proxy.
+WinReclaim 1.2.1 removes all model and cloud-provider dependencies from the desktop product.
 
-It does not scan the filesystem, calculate authoritative sizes, classify cleanup safety, select findings, create plans or execute cleanup. Core WinReclaim behaviour remains local and deterministic.
+The former Storage Assistant is now **Storage Brief**, a deterministic local explanation layer for a completed scan. The “Need help choosing?” control also runs locally through conservative intent rules.
+
+Neither feature scans independently, reads file contents, changes cleanup safety, creates actions, creates plans, or executes cleanup.
 
 ## Architecture
 
 ```text
-WinReclaim desktop app
-  └─ Rust builds anonymized aggregate metadata
-      └─ POST https://winreclaim.vercel.app/api/assistant
-          └─ Vercel serverless proxy
-              └─ OpenRouter model: openrouter/free
+Completed ScanReport
+  ├─ deterministic Storage Brief aggregation
+  └─ deterministic reclaim-by-intent parsing
+       └─ validated editable candidate selection
 ```
 
-The OpenRouter API key exists only in the Vercel production environment as `OPENROUTER_API_KEY`. It is never committed to the repository, included in the installer, stored in `%LOCALAPPDATA%`, exposed to the React frontend or returned to the client.
+There is no model process, sidecar, API key, HTTP client, hosted function, provider SDK, or background service.
 
-A desktop binary cannot securely contain a provider API key. Any key embedded in source code, Tauri configuration, frontend JavaScript, a Rust string, an installer resource or an environment file shipped with the app can be extracted. The application therefore embeds only the public proxy URL.
+## Storage Brief
 
-## Free model routing
+The brief is generated from the current backend-owned `ScanReport` and can describe:
 
-The proxy fixes the requested model to:
+- measured used and free bytes;
+- selected drive count;
+- number of reported locations;
+- number and reported size of verified cleanup actions;
+- largest reported categories;
+- safety-class distribution;
+- skipped entries;
+- scan warnings.
 
-```text
-openrouter/free
-```
+Category rows can overlap. Drive totals remain authoritative.
 
-OpenRouter selects an available free model that supports the request parameters, including structured output. The routed model name is returned with the report and shown in the interface.
+The brief does not receive or need:
 
-Free model capacity can vary. Requests may be slower or temporarily rate-limited. Failure never blocks access to the deterministic scan report.
-
-## Storage summary input
-
-Before any network request, Rust converts the current scan into bounded aggregate metadata:
-
-- used, free and total bytes;
-- number of selected drives;
-- scanned and skipped entry counts;
-- category names;
-- reported bytes per category;
-- location count per category;
-- actionable location count;
-- counts by deterministic risk class;
-- an explicit warning that category rows may overlap.
-
-The summary request does **not** include:
-
-- filesystem paths;
-- drive roots or labels;
-- usernames;
-- folder or file names;
-- project names;
 - file contents;
-- directory trees;
-- cleanup commands;
-- arbitrary executable input.
+- a separate filesystem traversal;
+- API credentials;
+- network access;
+- model weights;
+- executable commands.
 
-## Reclaim-by-intent input
+The returned report remains `advisoryOnly: true`.
 
-The optional “Need help choosing?” control sends a bounded user request plus anonymized executable candidates containing:
+## Local reclaim-by-intent
 
-- opaque candidate UUID;
-- category;
-- measured size;
-- deterministic risk class;
-- deterministic recovery consequence.
+The intent rules accept a bounded user sentence and operate only on existing executable candidates from the current scan.
 
-It does not send candidate paths, folder names, usernames, project names or file contents.
+Supported behaviour:
 
-The model may return only conservative constraints:
+- parses size targets expressed in KB, MB, GB, or TB;
+- defaults to `safe_now` candidates;
+- includes `rebuild_or_redownload` only when wording accepts caches, rebuilds, redownloads, dependencies, or named developer-tool categories;
+- includes `review_first` only through explicit phrases such as “include review-first actions”;
+- excludes matching candidate categories for phrases such as “do not touch”, “exclude”, “keep”, “protect”, “avoid”, “leave”, or “skip”.
 
-- target reclaim bytes;
-- allowed risk classes;
-- candidate IDs to exclude;
-- a short explanation.
+The selector then:
 
-Rust rejects unknown IDs and unsupported risk classes, then applies the result only as an editable selection suggestion.
-
-## Proxy restrictions
-
-The serverless function at `landing-page/api/assistant.js`:
-
-- accepts only `POST` requests from the WinReclaim client contract;
-- rejects oversized or malformed payloads;
-- supports only `storage_summary` and `intent_constraints` tasks;
-- fixes the model to `openrouter/free`;
-- requires structured JSON Schema output;
-- asks OpenRouter to route only to providers supporting required parameters;
-- caps input arrays and output tokens;
-- applies a basic per-IP demo rate limit;
-- validates all returned fields before responding;
-- returns bounded error messages;
-- never forwards arbitrary model IDs, prompts, tools or provider options from the client.
-
-The OpenRouter key should additionally have a low spending limit or guardrail and should be rotated after public judging.
+1. validates all allowed risk classes;
+2. validates exclusion IDs against the current candidate set;
+3. sorts by deterministic safety rank and reported size;
+4. stops after the requested size target is met;
+5. returns an editable suggestion with `remoteUsed: false`.
 
 ## Authority boundary
 
-The Storage Assistant may:
+Storage Brief and local intent rules may:
 
-- summarize the measured drive picture;
-- identify which aggregate categories are largest;
-- explain deterministic risk/action counts;
-- state uncertainty;
-- help translate a user's cleanup preference into conservative constraints.
+- summarize scan measurements;
+- explain category and safety counts;
+- propose an editable selection from existing verified actions.
 
-It cannot:
+They cannot:
 
+- calculate authoritative filesystem sizes independently;
 - mark a location safe;
 - change `riskClass`;
 - change `actionAvailable`;
 - attach an action kind;
 - add a cleanup target;
-- access a path;
+- access an arbitrary path;
 - select protected findings;
 - create or modify a cleanup plan;
 - run commands;
 - delete or restore files.
 
-Storage reports remain `advisoryOnly: true`.
+Planning and execution continue through the deterministic Rust planner and compiled cleanup adapters.
 
-## Output validation
+## Retired model migration
 
-The Vercel proxy requires strict JSON Schema output and validates the response before returning it. Rust then applies an independent boundary:
-
-- summary must meet minimum and maximum lengths;
-- observations are length- and count-bounded;
-- cleanup claims such as “safe to delete” or “should remove” are discarded;
-- model and provider errors do not alter the scan;
-- intent IDs must already exist in the current executable candidate set;
-- deterministic safety classes remain authoritative.
-
-## Retired local model migration
-
-Versions before 1.2.1 could download a Qwen GGUF model and `llama.cpp` runtime to:
+Earlier builds could download a Qwen GGUF model and `llama.cpp` runtime to:
 
 ```text
 %LOCALAPPDATA%\WinReclaim\models\storage-assistant
 ```
 
-Version 1.2.1 and later remove that retired directory during application startup. No model, runtime, manifest or prompt file is used by the cloud implementation.
-
-Manual removal is also safe after WinReclaim is closed:
+Version 1.2.1 removes that retired directory during startup. Manual removal is also safe after WinReclaim is closed:
 
 ```powershell
 Remove-Item -LiteralPath "$env:LOCALAPPDATA\WinReclaim\models\storage-assistant" -Recurse -Force -ErrorAction SilentlyContinue
@@ -152,39 +106,17 @@ if ((Test-Path $models) -and -not (Get-ChildItem -LiteralPath $models -Force | S
 }
 ```
 
-This does not remove scan history, receipts or Undo Vault data.
+This does not remove snapshots, receipts, or Undo Vault payloads.
 
-## Deployment configuration
+## Failure behaviour
 
-Create a dedicated OpenRouter key for the demo. Do not reuse a personal or broad production key.
+A brief or intent parsing error leaves the deterministic scan unchanged. Users can continue reviewing findings and creating cleanup plans manually.
 
-From the `landing-page` directory:
-
-```powershell
-vercel link --project winreclaim
-vercel env add OPENROUTER_API_KEY production
-vercel env add OPENROUTER_API_KEY preview
-vercel --prod
-```
-
-Paste the key only into the interactive Vercel prompt. Do not place it in a command, `.env` file committed to Git, GitHub Actions log, issue, screenshot or application source.
-
-The released desktop app already targets:
-
-```text
-https://winreclaim.vercel.app/api/assistant
-```
-
-For local proxy development, the Rust client can be redirected at runtime:
-
-```powershell
-$env:WINRECLAIM_ASSISTANT_URL="https://your-preview-domain.vercel.app/api/assistant"
-npm run tauri dev
-```
+No third-party outage, model capacity limit, key expiry, rate limit, or hosted deployment can block these features.
 
 ## Related documentation
 
 - [Privacy and network access](privacy.md)
 - [Threat model](threat-model.md)
 - [Safety model](safety.md)
-- [Deployment and releases](releases.md)
+- [Testing](testing.md)
