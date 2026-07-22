@@ -1,13 +1,10 @@
-use crate::cloud;
 use crate::domain::{RiskClass, ScanReport, StorageAssistantReport, StorageAssistantStatus};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const ROUTER_NAME: &str = "OpenRouter Free Models Router";
-const ROUTER_MODEL: &str = "openrouter/free";
-const MAX_CATEGORIES: usize = 40;
+const ENGINE_NAME: &str = "WinReclaim deterministic analysis";
+const ENGINE_VERSION: &str = "storage-rules-v1";
 const MAX_OBSERVATIONS: usize = 6;
 
 #[derive(Debug, Default)]
@@ -21,85 +18,106 @@ struct CategoryAccumulator {
     protected: u64,
 }
 
-#[derive(Debug, Serialize)]
-struct StorageSummaryPayload {
-    used_bytes: u64,
-    free_bytes: u64,
-    total_bytes: u64,
-    drive_count: usize,
-    scanned_entries: u64,
-    skipped_entries: u64,
-    rows_may_overlap: bool,
-    categories: Vec<CategorySummary>,
-}
-
-#[derive(Debug, Serialize)]
-struct CategorySummary {
-    category: String,
-    bytes: u64,
-    locations: u64,
-    actionable_locations: u64,
-    risk_counts: RiskCounts,
-}
-
-#[derive(Debug, Serialize)]
-struct RiskCounts {
-    safe_now: u64,
-    rebuild_or_redownload: u64,
-    review_first: u64,
-    protected: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct CloudStorageSummary {
-    summary: String,
-    #[serde(default)]
-    observations: Vec<String>,
-}
-
 pub fn status(busy: bool) -> StorageAssistantStatus {
     StorageAssistantStatus {
-        available: cloud::assistant_endpoint().starts_with("https://"),
+        available: true,
         busy,
-        provider: ROUTER_NAME.to_string(),
-        model: ROUTER_MODEL.to_string(),
-        privacy_note: "Only aggregate drive totals and category, size, risk and action-count metadata are sent. Paths, usernames, folder names, project names and file contents stay on this PC."
+        provider: ENGINE_NAME.to_string(),
+        model: ENGINE_VERSION.to_string(),
+        privacy_note: "The summary is generated locally from the completed scan. No network request, API key, model download, path upload, or file-content upload is used."
             .to_string(),
     }
 }
 
 pub fn analyze(report: &ScanReport) -> Result<StorageAssistantReport> {
-    let payload = build_payload(report);
-    let (model, response): (String, CloudStorageSummary) =
-        cloud::request("storage_summary", &payload)?;
+    let categories = aggregate_categories(report);
+    let actionable_bytes = report
+        .findings
+        .iter()
+        .filter(|finding| finding.action_available)
+        .fold(0_u64, |total, finding| {
+            total.saturating_add(finding.estimated_bytes)
+        });
+    let actionable_locations = report
+        .findings
+        .iter()
+        .filter(|finding| finding.action_available)
+        .count();
+    let drive_count = report.drives.len().max(1);
 
-    let summary = clean_line(&response.summary, 700);
-    if summary.len() < 20 || contains_cleanup_claim(&summary) {
-        return Err(anyhow!(
-            "The cloud assistant returned a summary that did not pass WinReclaim safety validation"
+    let summary = format!(
+        "WinReclaim measured {} used and {} free across {} drive{}. The scan reported {} storage location{}, including {} location{} with verified cleanup actions representing up to {} in reported size. Category rows can overlap, so the drive totals remain authoritative.",
+        format_bytes(report.disk.used_bytes),
+        format_bytes(report.disk.free_bytes),
+        drive_count,
+        plural(drive_count),
+        report.findings.len(),
+        plural(report.findings.len()),
+        actionable_locations,
+        plural(actionable_locations),
+        format_bytes(actionable_bytes),
+    );
+
+    let mut observations = Vec::new();
+    for (category, values) in categories.iter().take(3) {
+        observations.push(format!(
+            "{} is one of the largest reported categories at {} across {} location{}; {} of those location{} have verified actions.",
+            category,
+            format_bytes(values.bytes),
+            values.locations,
+            plural(values.locations as usize),
+            values.actionable_locations,
+            plural(values.actionable_locations as usize),
         ));
     }
 
-    let observations = response
-        .observations
-        .into_iter()
-        .map(|value| clean_line(&value, 260))
-        .filter(|value| value.len() >= 8)
-        .filter(|value| !contains_cleanup_claim(value))
-        .take(MAX_OBSERVATIONS)
-        .collect::<Vec<_>>();
+    let risk_counts = report.findings.iter().fold([0_u64; 4], |mut counts, finding| {
+        match finding.risk_class {
+            RiskClass::SafeNow => counts[0] += 1,
+            RiskClass::RebuildOrRedownload => counts[1] += 1,
+            RiskClass::ReviewFirst => counts[2] += 1,
+            RiskClass::Protected => counts[3] += 1,
+        }
+        counts
+    });
+    observations.push(format!(
+        "Safety classification: {} low-impact, {} rebuild/redownload, {} review-first, and {} protected location{}.",
+        risk_counts[0],
+        risk_counts[1],
+        risk_counts[2],
+        risk_counts[3],
+        plural(report.findings.len()),
+    ));
+
+    if report.skipped_entries > 0 {
+        observations.push(format!(
+            "The scanner skipped {} inaccessible, active, protected, or unsupported entr{}; no cleanup authority was inferred from those entries.",
+            report.skipped_entries,
+            if report.skipped_entries == 1 { "y" } else { "ies" },
+        ));
+    }
+
+    if !report.errors.is_empty() {
+        observations.push(format!(
+            "The scan completed with {} reported warning{}; review the scan diagnostics before acting on incomplete areas.",
+            report.errors.len(),
+            plural(report.errors.len()),
+        ));
+    }
+
+    observations.truncate(MAX_OBSERVATIONS);
 
     Ok(StorageAssistantReport {
         scan_id: report.scan_id,
         generated_at: Utc::now(),
-        model,
+        model: ENGINE_VERSION.to_string(),
         summary,
         observations,
         advisory_only: true,
     })
 }
 
-fn build_payload(report: &ScanReport) -> StorageSummaryPayload {
+fn aggregate_categories(report: &ScanReport) -> Vec<(String, CategoryAccumulator)> {
     let mut categories = BTreeMap::<String, CategoryAccumulator>::new();
 
     for finding in &report.findings {
@@ -120,34 +138,9 @@ fn build_payload(report: &ScanReport) -> StorageSummaryPayload {
         }
     }
 
-    let mut categories = categories
-        .into_iter()
-        .map(|(category, value)| CategorySummary {
-            category,
-            bytes: value.bytes,
-            locations: value.locations,
-            actionable_locations: value.actionable_locations,
-            risk_counts: RiskCounts {
-                safe_now: value.safe_now,
-                rebuild_or_redownload: value.rebuild_or_redownload,
-                review_first: value.review_first,
-                protected: value.protected,
-            },
-        })
-        .collect::<Vec<_>>();
-    categories.sort_by(|left, right| right.bytes.cmp(&left.bytes));
-    categories.truncate(MAX_CATEGORIES);
-
-    StorageSummaryPayload {
-        used_bytes: report.disk.used_bytes,
-        free_bytes: report.disk.free_bytes,
-        total_bytes: report.disk.total_bytes,
-        drive_count: report.drives.len().max(1),
-        scanned_entries: report.scanned_entries,
-        skipped_entries: report.skipped_entries,
-        rows_may_overlap: true,
-        categories,
-    }
+    let mut categories = categories.into_iter().collect::<Vec<_>>();
+    categories.sort_by(|left, right| right.1.bytes.cmp(&left.1.bytes));
+    categories
 }
 
 fn clean_line(value: &str, max_chars: usize) -> String {
@@ -160,20 +153,28 @@ fn clean_line(value: &str, max_chars: usize) -> String {
         .collect()
 }
 
-fn contains_cleanup_claim(value: &str) -> bool {
-    let value = value.to_ascii_lowercase();
-    [
-        "safe to delete",
-        "safe to remove",
-        "delete this",
-        "remove this",
-        "should delete",
-        "should remove",
-        "clean this",
-        "run the command",
-    ]
-    .iter()
-    .any(|claim| value.contains(claim))
+fn format_bytes(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    const GIB: f64 = MIB * 1024.0;
+    const TIB: f64 = GIB * 1024.0;
+    let value = bytes as f64;
+
+    if value >= TIB {
+        format!("{:.2} TiB", value / TIB)
+    } else if value >= GIB {
+        format!("{:.2} GiB", value / GIB)
+    } else if value >= MIB {
+        format!("{:.1} MiB", value / MIB)
+    } else if value >= KIB {
+        format!("{:.1} KiB", value / KIB)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+fn plural(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
 }
 
 #[cfg(test)]
@@ -181,10 +182,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cleanup_claims_are_rejected() {
-        assert!(contains_cleanup_claim("This is safe to delete."));
-        assert!(!contains_cleanup_claim(
-            "This category contains mostly rebuildable application data."
-        ));
+    fn formats_bytes_for_reports() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(1024), "1.0 KiB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GiB");
+    }
+
+    #[test]
+    fn local_status_is_always_available() {
+        let status = status(false);
+        assert!(status.available);
+        assert!(!status.busy);
+        assert!(status.privacy_note.contains("No network request"));
     }
 }
