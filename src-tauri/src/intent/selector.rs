@@ -55,7 +55,9 @@ pub(crate) fn build_suggestion(
 
     let summary = match constraints.target_reclaim_bytes {
         Some(target) if estimated_reclaim_bytes < target => format!(
-            "{summary} The available approved actions total {estimated_reclaim_bytes} bytes, below the requested {target} bytes."
+            "{summary} Approved actions total {}, below the requested {}.",
+            format_bytes(estimated_reclaim_bytes),
+            format_bytes(target)
         ),
         _ => summary,
     };
@@ -68,7 +70,7 @@ pub(crate) fn build_suggestion(
         excluded_labels,
         summary,
         model: model.to_string(),
-        remote_used: true,
+        remote_used: false,
     })
 }
 
@@ -84,9 +86,7 @@ fn validate_risk_classes(values: &[String]) -> Result<Vec<RiskClass>> {
     }
 
     if parsed.is_empty() {
-        return Err(anyhow!(
-            "The routed model returned no allowed cleanup risk classes"
-        ));
+        return Err(anyhow!("Intent rules returned no allowed cleanup risk classes"));
     }
 
     Ok(parsed)
@@ -97,7 +97,7 @@ fn validate_exclusions(values: &[Uuid], candidate_ids: &HashSet<Uuid>) -> Result
     for value in values {
         if !candidate_ids.contains(value) {
             return Err(anyhow!(
-                "The routed model referenced an unknown cleanup candidate"
+                "Intent rules referenced an unknown cleanup candidate"
             ));
         }
         excluded.insert(*value);
@@ -108,11 +108,11 @@ fn validate_exclusions(values: &[Uuid], candidate_ids: &HashSet<Uuid>) -> Result
 fn validate_summary(value: &str) -> Result<String> {
     let summary = value.trim();
     if summary.is_empty() {
-        return Err(anyhow!("The routed model returned an empty explanation"));
+        return Err(anyhow!("Intent rules returned an empty explanation"));
     }
     if summary.chars().count() > MAX_SUMMARY_CHARS {
         return Err(anyhow!(
-            "The routed model returned an unexpectedly long explanation"
+            "Intent rules returned an unexpectedly long explanation"
         ));
     }
     Ok(summary.to_string())
@@ -123,9 +123,7 @@ fn parse_risk(value: &str) -> Result<RiskClass> {
         "safe_now" => Ok(RiskClass::SafeNow),
         "rebuild_or_redownload" => Ok(RiskClass::RebuildOrRedownload),
         "review_first" => Ok(RiskClass::ReviewFirst),
-        _ => Err(anyhow!(
-            "The routed model returned an unsupported risk class"
-        )),
+        _ => Err(anyhow!("Intent rules returned an unsupported risk class")),
     }
 }
 
@@ -135,6 +133,19 @@ fn risk_rank(risk: RiskClass) -> u8 {
         RiskClass::RebuildOrRedownload => 1,
         RiskClass::ReviewFirst => 2,
         RiskClass::Protected => 3,
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+    const MIB: f64 = 1024.0 * 1024.0;
+    let value = bytes as f64;
+    if value >= GIB {
+        format!("{:.2} GiB", value / GIB)
+    } else if value >= MIB {
+        format!("{:.1} MiB", value / MIB)
+    } else {
+        format!("{bytes} B")
     }
 }
 
@@ -186,6 +197,7 @@ mod tests {
         assert_eq!(suggestion.selected_finding_ids, vec![safe.id, rebuild.id]);
         assert_eq!(suggestion.estimated_reclaim_bytes, 120);
         assert!(!suggestion.selected_finding_ids.contains(&review.id));
+        assert!(!suggestion.remote_used);
     }
 
     #[test]
