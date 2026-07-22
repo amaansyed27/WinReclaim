@@ -157,51 +157,43 @@ for (const retired of [
   "src-tauri/src/assistant/download.rs",
   "src-tauri/src/assistant/inference.rs",
   "src-tauri/src/assistant/prompt.rs",
+  "src-tauri/src/cloud.rs",
   "src-tauri/src/intent/openai.rs",
-  "src/features/assistant/StorageAssistantSettings.tsx"
+  "src-tauri/src/intent/openrouter.rs",
+  "src/features/assistant/StorageAssistantSettings.tsx",
+  "landing-page/api/assistant.js",
+  "scripts/test-assistant-proxy.mjs"
 ]) {
-  if (existsSync(retired)) violations.push(`${retired}: retired local/direct-provider implementation still exists`);
+  if (existsSync(retired)) violations.push(`${retired}: retired model/provider implementation still exists`);
 }
 
 requireText("src-tauri/src/assistant/mod.rs", [
-  "openrouter/free",
-  "cloud::request",
-  "StorageSummaryPayload",
-  "contains_cleanup_claim",
-  "advisory_only: true",
-  "Paths, usernames, folder names, project names and file contents stay on this PC"
-], "cloud assistant safeguard");
-requireText("src-tauri/src/cloud.rs", [
-  "https://winreclaim.vercel.app/api/assistant",
-  "X-WinReclaim-Client",
-  "WINRECLAIM_ASSISTANT_URL",
-  "Duration::from_secs(60)"
-], "cloud transport contract");
-requireText("src-tauri/src/intent/openrouter.rs", [
-  "openrouter/free",
-  "cloud::request",
-  "candidate_id",
-  "risk_class",
-  "paths, usernames, folder names, project names and file contents stay local"
-], "intent privacy contract");
-
-const proxy = requireText("landing-page/api/assistant.js", [
-  "OPENROUTER_API_KEY",
-  'const MODEL = "openrouter/free"',
-  "response_format",
-  "require_parameters: true",
-  "RATE_LIMIT",
-  "x-winreclaim-client",
-  "Never claim anything is safe to delete or remove",
-  "Anonymized cleanup candidates"
-], "proxy restriction");
-if (/sk-or-v1-[A-Za-z0-9_-]+/.test(proxy)) {
-  violations.push("landing-page/api/assistant.js: OpenRouter key was committed to source");
-}
+  "WinReclaim deterministic analysis",
+  "storage-rules-v1",
+  "available: true",
+  "No network request",
+  "aggregate_categories",
+  "advisory_only: true"
+], "deterministic storage brief safeguard");
+requireText("src-tauri/src/intent/rules.rs", [
+  "WinReclaim intent rules v1",
+  "parse_target_bytes",
+  "accepts_rebuildable",
+  "explicitly_accepts_review_first",
+  "category_is_excluded",
+  "No prompt"
+], "deterministic intent safeguard");
+requireText("src-tauri/src/intent/selector.rs", [
+  "remote_used: false",
+  "validate_risk_classes",
+  "validate_exclusions"
+], "local intent selector safeguard");
 
 const cargoManifest = read("src-tauri/Cargo.toml");
-if (cargoManifest.includes("llama-cpp-2") || cargoManifest.includes('zip = { version = "2"')) {
-  violations.push("src-tauri/Cargo.toml: retired local-model runtime dependency remains");
+for (const retiredDependency of ["llama-cpp-2", "reqwest =", 'zip = { version = "2"']) {
+  if (cargoManifest.includes(retiredDependency)) {
+    violations.push(`src-tauri/Cargo.toml: retired runtime/network dependency remains "${retiredDependency}"`);
+  }
 }
 
 const appLib = requireText("src-tauri/src/lib.rs", [
@@ -210,6 +202,9 @@ const appLib = requireText("src-tauri/src/lib.rs", [
 ], "assistant command");
 for (const retiredCommand of ["install_storage_assistant", "uninstall_storage_assistant"]) {
   if (appLib.includes(retiredCommand)) violations.push(`src-tauri/src/lib.rs: retired command remains "${retiredCommand}"`);
+}
+if (appLib.includes("mod cloud")) {
+  violations.push("src-tauri/src/lib.rs: retired cloud module is still registered");
 }
 
 if (violations.length) {
